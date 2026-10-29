@@ -12,13 +12,13 @@ const B = "22222222-2222-2222-2222-222222222222";
 await db.exec(`
   create role authenticated nologin;
   create schema auth;
-  create table auth.users (id uuid primary key);
+  create table auth.users (id uuid primary key, email text);
   create function auth.uid() returns uuid language sql stable as $$
     select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
   grant usage on schema auth to authenticated;
   grant execute on function auth.uid() to authenticated;
   grant usage on schema public to authenticated;
-  insert into auth.users values ('${A}'), ('${B}');
+  insert into auth.users values ('${A}', 'a@example.com'), ('${B}', 'b@example.com');
 `);
 
 for (const f of fs.readdirSync(dir).filter(f => f.endsWith(".sql")).sort()) {
@@ -72,6 +72,13 @@ check(upd.rows.length === 0, "non-member cannot update offers");
 await as(A, `insert into public.sales (household_id, item_id, listing_id, platform, sale_price, platform_fees, created_by) values ($1,$2,$3,'vinted',3.99,0,$4)`, [hA, item, listing, A]);
 await expectError(() => as(A, `insert into public.sales (household_id, item_id, platform, sale_price, created_by) values ($1,$2,'vinted',3.99,$3)`, [hA, item, A]),
   "only one sale per item");
+
+await expectError(() => as(B, "select public.add_household_member_by_email($1, 'b@example.com')", [hA]), "non-admin cannot add members");
+check((await as(A, "select public.add_household_member_by_email($1, 'nobody@example.com') as ok", [hA])).rows[0].ok === false, "unknown email returns false");
+check((await as(A, "select public.add_household_member_by_email($1, 'B@Example.com') as ok", [hA])).rows[0].ok === true, "admin adds member by email (case-insensitive)");
+check((await as(B, "select * from public.offers")).rows.length === 1, "new member now sees household offers");
+check((await as(B, "select * from public.household_members where household_id = $1", [hA])).rows.length === 2, "members see co-members");
+await expectError(() => as(B, "delete from public.listings where household_id = $1 returning id", [hA]).then(r => { if (r.rows.length === 0) throw new Error("blocked"); }), "member (non-admin) cannot delete listings");
 
 console.log(failures ? `${failures} FAILED` : "ALL PASSED");
 process.exit(failures ? 1 : 0);

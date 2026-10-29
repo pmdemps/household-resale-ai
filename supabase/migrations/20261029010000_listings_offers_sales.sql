@@ -36,6 +36,49 @@ grant execute on function public.is_household_member(uuid) to authenticated;
 grant execute on function public.is_household_admin(uuid) to authenticated;
 
 -- ---------------------------------------------------------------------------
+-- Add a household member by email (admins only). The person must already have
+-- signed up. Returns false when no account exists for that email.
+-- ---------------------------------------------------------------------------
+create or replace function public.add_household_member_by_email(
+  p_household_id uuid,
+  p_email text,
+  p_role text default 'member'
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  target_user uuid;
+begin
+  if not public.is_household_admin(p_household_id) then
+    raise exception 'Only household admins can add members';
+  end if;
+  if p_role not in ('admin', 'member') then
+    raise exception 'Role must be admin or member';
+  end if;
+  select u.id into target_user from auth.users u where lower(u.email) = lower(trim(p_email)) limit 1;
+  if target_user is null then
+    return false;
+  end if;
+  insert into public.household_members (household_id, user_id, role)
+  values (p_household_id, target_user, p_role)
+  on conflict (household_id, user_id) do update set role = excluded.role;
+  return true;
+end;
+$$;
+
+revoke all on function public.add_household_member_by_email(uuid, text, text) from public;
+grant execute on function public.add_household_member_by_email(uuid, text, text) to authenticated;
+
+-- Let members see who else is in their household (the initial policy only shows your own row).
+drop policy if exists "Members can view co-members" on public.household_members;
+create policy "Members can view co-members"
+  on public.household_members for select to authenticated
+  using (public.is_household_member(household_id));
+
+-- ---------------------------------------------------------------------------
 -- Inventory details useful for household decluttering
 -- ---------------------------------------------------------------------------
 alter table public.inventory_items
