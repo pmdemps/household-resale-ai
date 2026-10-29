@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getContext, requireHousehold } from "@/lib/household";
 import { estimateFees } from "@/lib/fees";
-import { PLATFORMS } from "@/lib/platforms";
+import { PLATFORMS, platformName } from "@/lib/platforms";
 import { CATEGORIES, ITEM_STATUSES, LISTING_STATUSES, num } from "@/lib/types";
 
 const PLATFORM_IDS = PLATFORMS.map(p => p.id) as string[];
@@ -47,8 +47,13 @@ async function log(ctx: Ctx, action: string, entityType: string, entityId: strin
 export async function createHousehold(form: FormData) {
   const ctx = await getContext();
   const name = text(form, "name", 120) || "Our household";
-  const { error } = await ctx.supabase.rpc("create_household", { p_name: name });
+  const { data: householdId, error } = await ctx.supabase.rpc("create_household", { p_name: name });
   fail(error);
+  const displayName = text(form, "display_name", 40);
+  if (displayName && householdId) {
+    await ctx.supabase.from("household_members").update({ display_name: displayName })
+      .eq("household_id", householdId).eq("user_id", ctx.userId);
+  }
   redirect("/");
 }
 
@@ -278,7 +283,7 @@ export async function decideOffer(form: FormData) {
         others.map(o => ({
           household_id: ctx.household.id,
           kind: "delist",
-          title: `Remove sold item from ${o.platform}`,
+          title: `Remove sold item from ${platformName(o.platform)}`,
           listing_id: o.id,
           item_id: listing.item_id,
           requested_by: "system",
@@ -330,7 +335,7 @@ export async function recordSale(form: FormData) {
     .eq("item_id", listing!.item_id).neq("id", listing!.id).in("status", ["draft", "active", "paused"]);
   if (others?.length) {
     await ctx.supabase.from("agent_tasks").insert(others.map(o => ({
-      household_id: ctx.household.id, kind: "delist", title: `Remove sold item from ${o.platform}`,
+      household_id: ctx.household.id, kind: "delist", title: `Remove sold item from ${platformName(o.platform)}`,
       listing_id: o.id, item_id: listing!.item_id, requested_by: "system",
       detail: "Item sold on another platform. End this listing now to avoid selling it twice.",
     })));
@@ -363,4 +368,59 @@ export async function signOut() {
   const ctx = await getContext();
   await ctx.supabase.auth.signOut();
   redirect("/login");
+}
+
+// ---------------------------------------------------------------------------
+// Notes & comments (household-only; never sent to marketplaces)
+// ---------------------------------------------------------------------------
+export async function addNote(form: FormData) {
+  const ctx = await requireHousehold();
+  const body = text(form, "body", 4000);
+  if (!body) return;
+  const itemId = optText(form, "item_id", 64);
+  const { data, error } = await ctx.supabase
+    .from("notes")
+    .insert({ household_id: ctx.household.id, item_id: itemId, author: ctx.userId, body })
+    .select("id")
+    .single();
+  fail(error);
+  await log(ctx, itemId ? "comment_added" : "note_added", "note", data!.id, { item_id: itemId });
+  revalidatePath("/notes");
+  revalidatePath("/");
+  if (itemId) revalidatePath(`/inventory/${itemId}`);
+}
+
+export async function toggleNotePin(form: FormData) {
+  const ctx = await requireHousehold();
+  const id = text(form, "id", 64);
+  const pinned = text(form, "pinned", 5) === "true";
+  fail((await ctx.supabase.from("notes").update({ pinned }).eq("id", id).eq("household_id", ctx.household.id)).error);
+  revalidatePath("/notes");
+  revalidatePath("/");
+}
+
+export async function deleteNote(form: FormData) {
+  const ctx = await requireHousehold();
+  const id = text(form, "id", 64);
+  const itemId = optText(form, "item_id", 64);
+  fail((await ctx.supabase.from("notes").delete().eq("id", id).eq("household_id", ctx.household.id)).error);
+  revalidatePath("/notes");
+  revalidatePath("/");
+  if (itemId) revalidatePath(`/inventory/${itemId}`);
+}
+
+export async function setDisplayName(form: FormData) {
+  const ctx = await requireHousehold();
+  const name = text(form, "display_name", 40);
+  fail(
+    (
+      await ctx.supabase
+        .from("household_members")
+        .update({ display_name: name || null })
+        .eq("household_id", ctx.household.id)
+        .eq("user_id", ctx.userId)
+    ).error,
+  );
+  revalidatePath("/", "layout");
+  redirect("/settings?name=saved");
 }

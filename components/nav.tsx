@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Boxes, HandCoins, LayoutDashboard, Plus, Settings } from "lucide-react";
+import { Boxes, HandCoins, LayoutDashboard, MessageSquareText, Plus, Settings } from "lucide-react";
 
 const LINKS = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
   { href: "/inventory", label: "Inventory", icon: Boxes },
   { href: "/offers", label: "Offers", icon: HandCoins },
+  { href: "/notes", label: "Notes", icon: MessageSquareText },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -42,7 +43,7 @@ export function SideNav({ pendingCount }: { pendingCount: number }) {
 /** Bottom tab bar for phones. */
 export function BottomNav({ pendingCount }: { pendingCount: number }) {
   const path = usePathname();
-  const items = [LINKS[0], LINKS[1], { href: "/inventory/new", label: "Add", icon: Plus }, LINKS[2], LINKS[3]];
+  const items = [LINKS[0], LINKS[1], { href: "/inventory/new", label: "Add", icon: Plus }, LINKS[2], LINKS[3]]; // Settings lives in the mobile top bar
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-ink/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
       <div className="mx-auto grid max-w-md grid-cols-5">

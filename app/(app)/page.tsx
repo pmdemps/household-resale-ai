@@ -1,15 +1,16 @@
 import Link from "next/link";
-import { ArrowRight, Boxes, CircleDollarSign, Download, HandCoins, Plus, Tags, TrendingUp } from "lucide-react";
+import { ArrowRight, Boxes, CircleDollarSign, Download, HandCoins, MessageSquareText, Plus, Tags, TrendingUp } from "lucide-react";
 import { resolveTask } from "@/app/actions";
 import { OfferCard } from "@/components/offer-card";
 import { requireHousehold } from "@/lib/household";
 import { platformName } from "@/lib/platforms";
-import { loadOverview, loadPendingOffers } from "@/lib/queries";
+import { loadMemberNames, loadNotes, loadOverview, loadPendingOffers } from "@/lib/queries";
+import { NoteComposer, NotesList } from "@/components/notes";
 import { money } from "@/lib/types";
 
 export default async function OverviewPage() {
   const ctx = await requireHousehold();
-  const [overview, offers] = await Promise.all([loadOverview(ctx), loadPendingOffers(ctx)]);
+  const [overview, offers, notes, names] = await Promise.all([loadOverview(ctx), loadPendingOffers(ctx), loadNotes(ctx, { limit: 4 }), loadMemberNames(ctx)]);
   const empty = overview.counts.unsold === 0 && overview.counts.sold === 0;
 
   return (
@@ -78,6 +79,17 @@ export default async function OverviewPage() {
         </section>
       )}
 
+      <section className="surface p-5">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-base font-semibold text-white"><MessageSquareText size={17} className="text-accent" /> Notes</h2>
+          <Link href="/notes" className="text-sm text-accent hover:underline">All notes</Link>
+        </div>
+        <div className="space-y-3">
+          <NotesList notes={notes} names={names} currentUser={ctx.userId} isAdmin={ctx.role === "admin"} />
+          <NoteComposer />
+        </div>
+      </section>
+
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="surface p-5">
           <h2 className="text-base font-semibold text-white">By platform</h2>
@@ -102,7 +114,7 @@ export default async function OverviewPage() {
             <ul className="mt-3 space-y-2 text-sm">
               {overview.activity.map(a => (
                 <li key={a.id} className="flex justify-between gap-3">
-                  <span className="truncate text-slate-300">{describe(a.action, a.detail as Record<string, unknown>)}{a.actor_agent ? <span className="text-slate-500"> · {a.actor_agent}</span> : null}</span>
+                  <span className="truncate text-slate-300">{a.actor_user && names[a.actor_user] ? <span className="text-slate-500">{a.actor_user === ctx.userId ? "You" : names[a.actor_user]}: </span> : null}{describe(a.action, a.detail as Record<string, unknown>)}{a.actor_agent ? <span className="text-slate-500"> · {a.actor_agent}</span> : null}</span>
                   <time className="shrink-0 text-xs text-slate-500">{new Date(a.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</time>
                 </li>
               ))}
@@ -122,6 +134,9 @@ function describe(action: string, d: Record<string, unknown>) {
     case "offer_accepted": return `Accepted ${money(Number(d.amount))}`;
     case "offer_declined": return `Declined ${money(Number(d.amount))}`;
     case "offer_countered": return `Countered at ${money(Number(d.counter))}`;
+    case "note_added": return "Posted a note";
+    case "comment_added": return "Commented on an item";
+    case "member_added": return "Added a household member";
     case "sale_recorded": return `Sold on ${platformName(String(d.platform))} for ${money(Number(d.salePrice))}`;
     default: return action.replace(/_/g, " ");
   }

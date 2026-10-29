@@ -1,5 +1,5 @@
-import { Download } from "lucide-react";
-import { addMemberByEmail } from "@/app/actions";
+import { Download, LogOut } from "lucide-react";
+import { addMemberByEmail, setDisplayName, signOut } from "@/app/actions";
 import { requireHousehold } from "@/lib/household";
 import { PLATFORMS } from "@/lib/platforms";
 
@@ -10,18 +10,36 @@ const EXPORTS = [
   { type: "sales", label: "Sales & profit" },
 ];
 
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ member?: string }> }) {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ member?: string; name?: string }> }) {
   const ctx = await requireHousehold();
-  const { member } = await searchParams;
-  const { data: members } = await ctx.supabase.from("household_members").select("user_id, role").eq("household_id", ctx.household.id);
+  const { member, name } = await searchParams;
+  const { data: members } = await ctx.supabase.from("household_members").select("user_id, role, display_name").eq("household_id", ctx.household.id);
 
   return (
     <div className="max-w-3xl space-y-6">
       <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Settings</h1>
 
       <section className="surface p-5">
+        <h2 className="text-base font-semibold text-white">Your name</h2>
+        <p className="mt-1 text-sm text-slate-400">Shown on your notes and activity.</p>
+        <form action={setDisplayName} className="mt-3 flex flex-wrap gap-2">
+          <input name="display_name" maxLength={40} className="field min-w-[12rem] flex-1" placeholder="First name"
+            defaultValue={(members ?? []).find(m => m.user_id === ctx.userId)?.display_name ?? ""} />
+          <button className="btn-primary">Save</button>
+        </form>
+        {name === "saved" && <p className="mt-2 text-sm text-emerald-300">Saved.</p>}
+      </section>
+
+      <section className="surface p-5">
         <h2 className="text-base font-semibold text-white">Household</h2>
         <p className="mt-1 text-sm text-slate-400">{ctx.household.name} · {members?.length ?? 1} member{members?.length === 1 ? "" : "s"} · you are {ctx.role}</p>
+        <ul className="mt-3 flex flex-wrap gap-2">
+          {(members ?? []).map((m, i) => (
+            <li key={m.user_id} className="rounded-full border border-line px-3 py-1 text-xs text-slate-300">
+              {m.display_name || (m.user_id === ctx.userId ? "You" : `Member ${i + 1}`)}{m.user_id === ctx.userId ? " (you)" : ""} · {m.role}
+            </li>
+          ))}
+        </ul>
         {ctx.role === "admin" && (
           <form action={addMemberByEmail} className="mt-4 flex flex-wrap gap-2">
             <input name="email" type="email" required className="field min-w-[14rem] flex-1" placeholder="Their account email" />
@@ -41,6 +59,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           ))}
         </div>
       </section>
+
+      <form action={signOut} className="lg:hidden">
+        <button className="btn-secondary w-full"><LogOut size={15} /> Sign out</button>
+      </form>
 
       <section className="surface p-5">
         <h2 className="text-base font-semibold text-white">Marketplaces</h2>

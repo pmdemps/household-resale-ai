@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LogOut, ShoppingBag } from "lucide-react";
+import { LogOut, Settings, ShoppingBag } from "lucide-react";
 import { BottomNav, SideNav } from "@/components/nav";
 import { signOut } from "@/app/actions";
 import { isSupabaseConfigured, requireHousehold } from "@/lib/household";
@@ -34,7 +34,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </button>
         </form>
       </aside>
-      <main className="min-w-0 flex-1 px-4 pb-28 pt-5 sm:px-7 lg:px-10 lg:pb-10 lg:pt-8">{children}</main>
+      <main className="min-w-0 flex-1 px-4 pb-28 pt-4 sm:px-7 lg:px-10 lg:pb-10 lg:pt-8">
+        <div className="mb-4 flex items-center justify-between lg:hidden">
+          <Link href="/" className="flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent text-ink"><ShoppingBag size={17} /></span>
+            <span className="text-sm font-semibold text-white">Resale HQ</span>
+          </Link>
+          <Link href="/settings" className="rounded-xl p-2 text-slate-400 hover:bg-white/[0.06] hover:text-white" aria-label="Settings"><Settings size={19} /></Link>
+        </div>
+        {children}
+      </main>
       <BottomNav pendingCount={pending} />
     </div>
   );

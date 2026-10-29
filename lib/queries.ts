@@ -1,7 +1,7 @@
 import "server-only";
 import type { AppContext } from "@/lib/household";
 import type { OfferWithContext } from "@/components/offer-card";
-import type { AgentTask, InventoryItem, Listing, Sale } from "@/lib/types";
+import type { AgentTask, InventoryItem, Listing, Note, Sale } from "@/lib/types";
 import { num } from "@/lib/types";
 
 type Ctx = AppContext & { household: { id: string } };
@@ -95,4 +95,33 @@ export async function loadOverview(ctx: Ctx) {
     tasks: (tasks.data ?? []) as AgentTask[],
     activity: activity.data ?? [],
   };
+}
+
+export type MemberNames = Record<string, string>;
+
+/** user_id -> display name for everyone in the household. */
+export async function loadMemberNames(ctx: Ctx): Promise<MemberNames> {
+  const { data } = await ctx.supabase
+    .from("household_members")
+    .select("user_id, display_name, role")
+    .eq("household_id", ctx.household.id)
+    .order("created_at");
+  const names: MemberNames = {};
+  (data ?? []).forEach((m, i) => {
+    names[m.user_id as string] = (m.display_name as string | null)?.trim() || (m.user_id === ctx.userId ? "You" : `Member ${i + 1}`);
+  });
+  return names;
+}
+
+export async function loadNotes(ctx: Ctx, opts: { itemId?: string; limit?: number } = {}) {
+  let q = ctx.supabase
+    .from("notes")
+    .select("*, inventory_items(id, name)")
+    .eq("household_id", ctx.household.id);
+  if (opts.itemId) q = q.eq("item_id", opts.itemId).order("created_at", { ascending: true });
+  else q = q.order("pinned", { ascending: false }).order("created_at", { ascending: false });
+  if (opts.limit) q = q.limit(opts.limit);
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  return (data ?? []) as (Note & { inventory_items: { id: string; name: string } | null })[];
 }

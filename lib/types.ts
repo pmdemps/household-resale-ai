@@ -116,3 +116,24 @@ export const num = (v: unknown): number => {
 
 export const money = (n: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+
+export type Note = {
+  id: string;
+  household_id: string;
+  item_id: string | null;
+  author: string;
+  body: string;
+  pinned: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+/** "5m ago", "3h ago", "Oct 12". */
+export function timeAgo(iso: string, now = Date.now()): string {
+  const s = Math.max(0, Math.round((now - new Date(iso).getTime()) / 1000));
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  if (s < 7 * 86400) return `${Math.floor(s / 86400)}d ago`;
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
