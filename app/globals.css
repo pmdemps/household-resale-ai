@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: radial-gradient(ellipse at 75% -20%, rgba(48,91,164,.18), transparent 42%), #0b1020;
+  color: #edf2ff; font-family: Arial, Helvetica, sans-serif;
+}
+button, input, select { font: inherit; }
+@layer components {
+  .surface { @apply rounded-2xl border border-line bg-panel/80; }
+  .eyebrow { @apply text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400; }
+  .field { @apply w-full rounded-xl border border-line bg-ink px-3 py-2.5 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-accent; }
+  .btn-primary { @apply inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-ink hover:bg-blue-300; }
+  .btn-secondary { @apply inline-flex items-center justify-center gap-2 rounded-xl border border-line bg-white/[0.03] px-3 py-2.5 text-sm font-medium text-slate-200 hover:bg-white/[0.07]; }
+}
