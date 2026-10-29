@@ -1,61 +1,139 @@
-"use client";
+import Link from "next/link";
+import { ArrowRight, Boxes, CircleDollarSign, Download, HandCoins, Plus, Tags, TrendingUp } from "lucide-react";
+import { resolveTask } from "@/app/actions";
+import { OfferCard } from "@/components/offer-card";
+import { requireHousehold } from "@/lib/household";
+import { platformName } from "@/lib/platforms";
+import { loadOverview, loadPendingOffers } from "@/lib/queries";
+import { money } from "@/lib/types";
 
-import { useMemo, useState, type FormEvent } from "react";
-import { Activity, Bot, Boxes, CircleDollarSign, LayoutDashboard, Plus, Search, ShoppingBag, Sparkles, Tags, TrendingUp, Wallet, X } from "lucide-react";
+export default async function OverviewPage() {
+  const ctx = await requireHousehold();
+  const [overview, offers] = await Promise.all([loadOverview(ctx), loadPendingOffers(ctx)]);
+  const empty = overview.counts.unsold === 0 && overview.counts.sold === 0;
 
-type Item = { id: string; name: string; category: string; source: string; cost: number; ask: number; status: string };
-const sampleItems: Item[] = [
-  { id: "RS-001", name: "Cordless impact driver", category: "Tools", source: "Yard sale", cost: 25, ask: 69, status: "Listed" },
-  { id: "RS-002", name: "Nintendo Switch bundle", category: "Electronics", source: "Facebook Marketplace", cost: 110, ask: 185, status: "Draft" },
-  { id: "RS-003", name: "Vintage patio chairs (pair)", category: "Home & garden", source: "Estate sale", cost: 30, ask: 95, status: "Needs attention" },
-  { id: "RS-004", name: "LEGO Creator set", category: "Toys & games", source: "Thrift store", cost: 18, ask: 42, status: "Sold" }
-];
-const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(n);
-
-export default function HomePage() {
-  const [items, setItems] = useState<Item[]>(sampleItems);
-  const [query, setQuery] = useState("");
-  const [modal, setModal] = useState(false);
-  const [notice, setNotice] = useState("Demo mode: sample figures only. Database and AI connections are not configured yet.");
-  const [name, setName] = useState("");
-  const [category, setCategory] = useState("Tools");
-  const [source, setSource] = useState("");
-  const [cost, setCost] = useState("");
-  const [ask, setAsk] = useState("");
-  const filtered = useMemo(() => items.filter(i => [i.name, i.category, i.source, i.status, i.id].some(v => v.toLowerCase().includes(query.toLowerCase()))), [items, query]);
-  const margin = items.reduce((sum, i) => sum + Math.max(0, i.ask - i.cost), 0);
-  const invested = items.reduce((sum, i) => sum + i.cost, 0);
-  function addItem(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!name.trim() || !source.trim() || Number(cost) < 0 || Number(ask) < 0) return;
-    setItems(current => [{ id: "RS-" + String(Date.now()).slice(-5), name: name.trim(), category, source: source.trim(), cost: Number(cost), ask: Number(ask), status: "Draft" }, ...current]);
-    setName(""); setSource(""); setCost(""); setAsk(""); setModal(false);
-    setNotice("Added to this demo session only. Entries reset when you reload; persistent storage is next.");
-  }
-  return <main className="min-h-screen">
-    <div className="mx-auto flex min-h-screen max-w-[1600px]">
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-line/80 px-5 py-6 lg:flex">
-        <div className="flex items-center gap-3 px-2"><span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-accent text-ink"><ShoppingBag size={21}/></span><div><p className="text-sm font-semibold text-white">Resale HQ</p><p className="text-xs text-slate-500">Household Resale AI</p></div></div>
-        <p className="eyebrow mt-10 px-3">Workspace</p>
-        <div className="mt-3 space-y-1">{[{ label: "Overview", icon: LayoutDashboard }, { label: "Inventory", icon: Boxes }, { label: "Deal finder", icon: Search }, { label: "Listings", icon: Tags }, { label: "AI workspace", icon: Bot }].map(({label, icon: Icon}) => <button key={label} onClick={() => setNotice(label + " is on the roadmap. We're building inventory and persistence first.")} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-slate-400 hover:bg-white/[0.04] hover:text-white"><Icon size={17}/>{label}{label === "AI workspace" && <span className="ml-auto text-[10px] text-slate-600">SOON</span>}</button>)}</div>
-        <div className="mt-auto rounded-2xl border border-line bg-white/[0.025] p-4"><div className="flex items-center gap-2 text-accent"><Sparkles size={16}/><span className="text-sm font-semibold">AI co-pilot</span></div><p className="mt-2 text-xs leading-5 text-slate-400">A future team for deal analysis, listing drafts, and margin checks.</p></div>
-      </aside>
-      <section className="min-w-0 flex-1 px-4 py-5 sm:px-7 sm:py-7 lg:px-10">
-        <header className="flex flex-wrap items-center justify-between gap-4"><div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl border border-line bg-panel lg:hidden"><ShoppingBag size={18} className="text-accent"/></span><div><p className="text-xs text-slate-500">Workspace / Overview</p><h1 className="mt-1 text-2xl font-semibold tracking-tight text-white sm:text-3xl">Let&apos;s make some moves.</h1></div></div><button className="btn-primary" onClick={() => setModal(true)}><Plus size={17}/> Add item</button></header>
-        <div className="mt-6 flex items-start gap-2 rounded-xl border border-amber-300/15 bg-amber-300/[0.06] px-4 py-3 text-xs leading-5 text-amber-100/80"><Activity size={15} className="mt-0.5 shrink-0 text-amber-300"/><span>{notice} <span className="text-amber-100/60">This is a UI prototype; nothing is saved to a database yet.</span></span></div>
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {[{label:"Inventory items", value:String(items.length), note:"Across all statuses", icon:Boxes},{label:"Potential gross margin", value:money(margin), note:"Asking price minus item cost", icon:TrendingUp},{label:"Listed items", value:String(items.filter(i=>i.status==="Listed").length), note:"Sample items marked listed", icon:Tags},{label:"Cash invested", value:money(invested), note:"Cost of items in this view", icon:Wallet}].map(({label,value,note,icon:Icon})=><div key={label} className="surface p-5"><div className="flex items-start justify-between gap-3"><p className="text-sm text-slate-400">{label}</p><span className="rounded-xl border border-line bg-white/[0.04] p-2.5 text-accent"><Icon size={18}/></span></div><p className="mt-5 text-2xl font-semibold tracking-tight text-white sm:text-3xl">{value}</p><p className="mt-2 text-xs text-slate-400">{note}</p></div>)}
+  return (
+    <div className="space-y-6">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-xs text-slate-500">{ctx.household.name}</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-white sm:text-3xl">Overview</h1>
         </div>
-        <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(280px,0.8fr)]">
-          <section className="surface min-w-0 overflow-hidden"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4 sm:px-6"><div><h2 className="font-semibold text-white">Inventory</h2><p className="mt-1 text-xs text-slate-500">Track what you own, list, and sell.</p></div><label className="relative block"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"/><input aria-label="Search inventory" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search items..." className="field w-48 pl-9"/></label></div>
-            <div className="overflow-x-auto"><table className="w-full min-w-[600px] text-left text-sm"><thead className="bg-white/[0.02] text-[11px] uppercase tracking-wider text-slate-500"><tr><th className="px-6 py-3 font-medium">Item</th><th className="px-4 py-3 font-medium">Source</th><th className="px-4 py-3 font-medium">Cost</th><th className="px-4 py-3 font-medium">Ask</th><th className="px-6 py-3 font-medium">Status</th></tr></thead><tbody className="divide-y divide-line/70">{filtered.map(i=><tr key={i.id} className="hover:bg-white/[0.025]"><td className="px-6 py-4"><p className="font-medium text-slate-100">{i.name}</p><p className="mt-1 text-xs text-slate-500">{i.id} · {i.category}</p></td><td className="px-4 py-4 text-xs text-slate-400">{i.source}</td><td className="px-4 py-4 text-slate-300">{money(i.cost)}</td><td className="px-4 py-4 font-medium text-white">{money(i.ask)}</td><td className="px-6 py-4"><span className={"inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-medium " + (i.status==="Listed" ? "border-sky-400/20 bg-sky-400/10 text-sky-300" : i.status==="Sold" ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300" : i.status==="Draft" ? "border-violet-400/20 bg-violet-400/10 text-violet-300" : "border-amber-400/20 bg-amber-400/10 text-amber-300")}>{i.status}</span></td></tr>)}{filtered.length===0 && <tr><td colSpan={5} className="px-6 py-10 text-center text-slate-500">No matching items.</td></tr>}</tbody></table></div>
-            <div className="flex justify-between border-t border-line px-6 py-3 text-xs text-slate-500"><span>Showing {filtered.length} of {items.length} items</span><span>Sample data</span></div>
-          </section>
-          <div className="space-y-5"><section className="surface p-5"><div className="flex items-center justify-between"><h2 className="font-semibold text-white">AI agent lineup</h2><span className="rounded-full border border-violet-400/20 bg-violet-400/10 px-2 py-1 text-[10px] text-violet-300">Planned</span></div><p className="mt-1 text-xs leading-5 text-slate-400">Use different models for specialized jobs, then review their work in one place.</p><div className="mt-4 space-y-3">{[{name:"Deal analyst",desc:"Compare price, risk, and likely margin",icon:Search},{name:"Listing writer",desc:"Draft titles and descriptions",icon:Tags},{name:"Margin checker",desc:"Review fees and profit assumptions",icon:CircleDollarSign}].map(({name,desc,icon:Icon})=><div key={name} className="flex items-center gap-3 rounded-xl border border-line bg-ink/60 p-3"><span className="rounded-lg bg-white/[0.04] p-2 text-accent"><Icon size={16}/></span><div><p className="text-sm font-medium text-slate-200">{name}</p><p className="mt-0.5 text-[11px] text-slate-500">{desc}</p></div></div>)}</div><button className="btn-secondary mt-4 w-full" onClick={()=>setNotice("AI provider settings are not connected yet. We'll add secure server-side adapters after authentication and persistence.")}><Bot size={15}/> Configure AI providers</button></section>
-            <section className="surface p-5"><h2 className="font-semibold text-white">Build sequence</h2><div className="mt-4 space-y-4 text-sm"><p className="flex gap-3"><span className="text-emerald-300">01</span><span><b className="font-medium text-slate-200">Dashboard prototype</b><span className="mt-1 block text-xs text-slate-500">In progress — this first UI.</span></span></p><p className="flex gap-3"><span className="text-accent">02</span><span><b className="font-medium text-slate-200">Database + logins</b><span className="mt-1 block text-xs text-slate-500">Shared data with individual accounts.</span></span></p><p className="flex gap-3"><span className="text-accent">03</span><span><b className="font-medium text-slate-200">AI providers + runner</b><span className="mt-1 block text-xs text-slate-500">Server-side models and scheduled jobs.</span></span></p></div></section></div>
-        </div><footer className="mt-8 flex flex-wrap justify-between gap-2 border-t border-line/70 pt-5 text-xs text-slate-600"><span>Resale HQ · early prototype</span><span>Keep API keys and private records out of GitHub.</span></footer>
+        <div className="flex gap-2">
+          <a href="/api/export?type=items" className="btn-secondary hidden sm:inline-flex"><Download size={16} /> Export CSV</a>
+          <Link href="/inventory/new" className="btn-primary"><Plus size={17} /> Add item</Link>
+        </div>
+      </header>
+
+      {empty && (
+        <section className="surface p-6">
+          <h2 className="text-lg font-semibold text-white">Start with one room</h2>
+          <p className="mt-2 max-w-xl text-sm leading-6 text-slate-400">
+            Walk through a closet or the kids&apos; room and add each thing you want gone: what it is, size, condition, where it&apos;s stored, and
+            the lowest price you&apos;d take. Use &quot;Save &amp; add another&quot; to move fast.
+          </p>
+          <Link href="/inventory/new" className="btn-primary mt-4"><Plus size={16} /> Add your first item</Link>
+        </section>
+      )}
+
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Stat icon={Boxes} label="To sell" value={String(overview.counts.unsold)} sub={`${overview.counts.needsListing} not listed yet`} href="/inventory?status=open" />
+        <Stat icon={Tags} label="Live listings" value={String(overview.counts.activeListings)} sub={`${money(overview.activeValue)} listed`} href="/inventory?status=listed" />
+        <Stat icon={CircleDollarSign} label="Paid out" value={money(overview.payout)} sub={`${overview.counts.sold} sold · ${money(overview.revenue)} gross`} />
+        <Stat icon={TrendingUp} label="Profit" value={money(overview.profit)} sub="after fees, shipping, cost" tone={overview.profit >= 0 ? "good" : "bad"} />
       </section>
+
+      {offers.length > 0 && (
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-white"><HandCoins size={18} className="text-accent" /> Offers waiting on you</h2>
+            {offers.length > 2 && <Link href="/offers" className="text-sm text-accent hover:underline">All {offers.length}</Link>}
+          </div>
+          <div className="space-y-3">{offers.slice(0, 2).map(o => <OfferCard key={o.id} offer={o} />)}</div>
+        </section>
+      )}
+
+      {overview.tasks.length > 0 && (
+        <section className="surface p-5">
+          <h2 className="text-base font-semibold text-white">To do</h2>
+          <ul className="mt-3 divide-y divide-line">
+            {overview.tasks.map(t => (
+              <li key={t.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                <div className="min-w-0">
+                  <p className="text-sm text-white">{t.title}</p>
+                  {t.detail && <p className="mt-0.5 text-xs text-slate-400">{t.detail}</p>}
+                  <p className="mt-0.5 text-[11px] text-slate-500">from {t.requested_by}</p>
+                </div>
+                <div className="flex gap-2">
+                  {t.item_id && <Link href={`/inventory/${t.item_id}`} className="btn-secondary py-1.5 text-xs">Open</Link>}
+                  <form action={resolveTask}>
+                    <input type="hidden" name="id" value={t.id} />
+                    <input type="hidden" name="status" value="done" />
+                    <button className="btn-primary py-1.5 text-xs">Done</button>
+                  </form>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <section className="surface p-5">
+          <h2 className="text-base font-semibold text-white">By platform</h2>
+          {overview.byPlatform.length === 0 ? (
+            <p className="mt-3 text-sm text-slate-500">Nothing listed yet.</p>
+          ) : (
+            <table className="mt-3 w-full text-sm">
+              <thead><tr className="text-left text-xs text-slate-500"><th className="pb-2 font-normal">Platform</th><th className="pb-2 text-right font-normal">Live</th><th className="pb-2 text-right font-normal">Sold</th><th className="pb-2 text-right font-normal">Paid out</th></tr></thead>
+              <tbody className="divide-y divide-line">
+                {overview.byPlatform.map(p => (
+                  <tr key={p.platform}><td className="py-2 text-slate-200">{platformName(p.platform)}</td><td className="py-2 text-right tabular-nums">{p.active}</td><td className="py-2 text-right tabular-nums">{p.sold}</td><td className="py-2 text-right tabular-nums">{money(p.payout)}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+        <section className="surface p-5">
+          <h2 className="text-base font-semibold text-white">Recent activity</h2>
+          {overview.activity.length === 0 ? (
+            <p className="mt-3 text-sm text-slate-500">No activity yet.</p>
+          ) : (
+            <ul className="mt-3 space-y-2 text-sm">
+              {overview.activity.map(a => (
+                <li key={a.id} className="flex justify-between gap-3">
+                  <span className="truncate text-slate-300">{describe(a.action, a.detail as Record<string, unknown>)}{a.actor_agent ? <span className="text-slate-500"> · {a.actor_agent}</span> : null}</span>
+                  <time className="shrink-0 text-xs text-slate-500">{new Date(a.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</time>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
     </div>
-    {modal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onMouseDown={e=>{if(e.target===e.currentTarget)setModal(false)}}><section role="dialog" aria-modal="true" aria-labelledby="add-title" className="surface w-full max-w-lg p-6"><div className="flex items-start justify-between"><div><p className="eyebrow">Inventory</p><h2 id="add-title" className="mt-1 text-xl font-semibold text-white">Add an item</h2><p className="mt-1 text-sm text-slate-400">Capture the basics before listing.</p></div><button aria-label="Close dialog" onClick={()=>setModal(false)} className="rounded-lg p-2 text-slate-400 hover:bg-white/5"><X size={18}/></button></div><form onSubmit={addItem} className="mt-5 space-y-4"><div><label htmlFor="name" className="mb-1.5 block text-xs text-slate-300">Item name</label><input id="name" className="field" value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Cordless drill set" required/></div><div className="grid gap-4 sm:grid-cols-2"><div><label htmlFor="category" className="mb-1.5 block text-xs text-slate-300">Category</label><select id="category" className="field" value={category} onChange={e=>setCategory(e.target.value)}><option>Tools</option><option>Electronics</option><option>Home & garden</option><option>Toys & games</option><option>Clothing</option><option>Collectibles</option><option>Other</option></select></div><div><label htmlFor="source" className="mb-1.5 block text-xs text-slate-300">Where bought</label><input id="source" className="field" value={source} onChange={e=>setSource(e.target.value)} placeholder="Yard sale, auction..." required/></div></div><div className="grid gap-4 sm:grid-cols-2"><div><label htmlFor="cost" className="mb-1.5 block text-xs text-slate-300">Total cost ($)</label><input id="cost" type="number" min="0" step="0.01" className="field" value={cost} onChange={e=>setCost(e.target.value)} placeholder="0.00" required/></div><div><label htmlFor="ask" className="mb-1.5 block text-xs text-slate-300">Target asking price ($)</label><input id="ask" type="number" min="0" step="0.01" className="field" value={ask} onChange={e=>setAsk(e.target.value)} placeholder="0.00" required/></div></div><div className="flex justify-end gap-2 border-t border-line pt-4"><button type="button" className="btn-secondary" onClick={()=>setModal(false)}>Cancel</button><button type="submit" className="btn-primary"><Plus size={16}/> Add to demo</button></div><p className="text-[11px] leading-5 text-amber-200/60">Prototype only: this entry is held in memory and resets on reload.</p></form></section></div>}
-  </main>;
+  );
+}
+
+function describe(action: string, d: Record<string, unknown>) {
+  switch (action) {
+    case "item_created": return `Added ${d.name ?? "an item"}`;
+    case "listing_added": return `Listed on ${platformName(String(d.platform))}`;
+    case "offer_recorded": return `Offer of ${money(Number(d.amount))} recorded`;
+    case "offer_accepted": return `Accepted ${money(Number(d.amount))}`;
+    case "offer_declined": return `Declined ${money(Number(d.amount))}`;
+    case "offer_countered": return `Countered at ${money(Number(d.counter))}`;
+    case "sale_recorded": return `Sold on ${platformName(String(d.platform))} for ${money(Number(d.salePrice))}`;
+    default: return action.replace(/_/g, " ");
+  }
+}
+
+function Stat({ icon: Icon, label, value, sub, href, tone }: { icon: typeof Boxes; label: string; value: string; sub: string; href?: string; tone?: "good" | "bad" }) {
+  const body = (
+    <div className="surface h-full p-4">
+      <div className="flex items-center justify-between text-slate-400"><span className="text-xs">{label}</span><Icon size={16} /></div>
+      <p className={"mt-2 text-xl font-semibold tabular-nums sm:text-2xl " + (tone === "bad" ? "text-rose-300" : tone === "good" ? "text-emerald-300" : "text-white")}>{value}</p>
+      <p className="mt-1 flex items-center gap-1 text-[11px] text-slate-500">{sub}{href && <ArrowRight size={11} />}</p>
+    </div>
+  );
+  return href ? <Link href={href}>{body}</Link> : body;
 }
