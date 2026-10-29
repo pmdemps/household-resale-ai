@@ -60,16 +60,10 @@ create policy "Household members can view their households"
     )
   );
 
-drop policy if exists "Members can view household membership" on public.household_members;
-create policy "Members can view household membership"
+drop policy if exists "Users can view their own memberships" on public.household_members;
+create policy "Users can view their own memberships"
   on public.household_members for select to authenticated
-  using (
-    exists (
-      select 1 from public.household_members mine
-      where mine.household_id = household_members.household_id
-        and mine.user_id = auth.uid()
-    )
-  );
+  using (user_id = auth.uid());
 
 drop policy if exists "Household members can view inventory" on public.inventory_items;
 create policy "Household members can view inventory"
