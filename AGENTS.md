@@ -42,6 +42,7 @@ These apply to any agent that reads or acts on marketplaces, email, or the house
 
 - `app/(app)/` signed-in pages: overview, inventory, item detail, offers, settings
 - `app/actions.ts` all writes (server actions); every write also logs to `activity_log`
+- `lib/photos.ts` item photos (public `item-photos` bucket): `loadPhotos(ctx, itemId)` / `publicPhotoUrl(path)` give the public HTTPS image URLs to put on marketplace listings; uploads via `app/photo-actions.ts`
 - `app/api/export` CSV exports
 - `lib/fees.ts` fee rules per platform with `verifiedOn` dates; update the date and source when you re-check
 - `lib/platforms.ts` platform capabilities and posting rules

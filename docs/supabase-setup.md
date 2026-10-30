@@ -11,3 +11,15 @@ The repository contains the initial SQL migration, shared-household schema, and 
 7. For deployment, add the same public URL/key as environment variables in the hosting provider. Do not add a secret/service-role key to client-exposed variables.
 
 The schema uses row-level security: inventory is scoped to household membership, so two separate accounts can access the same household inventory without sharing credentials. Household members can read and edit inventory; only household admins can delete inventory or add members.
+
+## Photos
+
+Item photos live in a Storage bucket called `item-photos`. The migration `20261030020000_item_photos.sql` creates the bucket itself (`insert into storage.buckets …`) along with the `item_photos` table and the object policies, so there is nothing to click through in **Storage → New bucket**. After applying it, check in the dashboard that:
+
+- **Storage → item-photos** exists and is marked **Public**, with a 10 MB file size limit and allowed types `image/jpeg, image/png, image/webp, image/heic`. Public is deliberate: eBay and Etsy fetch listing images by plain URL, and object paths are unguessable (`<household id>/<item id>/<random uuid>.jpg`).
+- **Storage → Policies → item-photos** shows four policies: anyone can view; members upload / update / delete only under their own household's folder (`public.is_item_photo_path_member`).
+- Uploads go through the app with the signed-in user's JWT, so the RLS above is what protects writes. No service-role key is involved.
+
+If the migration is ever applied by a tool that lacks rights on the `storage` schema, create the bucket by hand with those settings and re-run just the `storage.*` statements from the migration in the SQL editor.
+
+Public image URL for a photo: `<NEXT_PUBLIC_SUPABASE_URL>/storage/v1/object/public/item-photos/<storage_path>` (`publicPhotoUrl()` in `lib/photos.ts`).

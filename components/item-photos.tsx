@@ -31,10 +31,10 @@ export function ItemPhotos({ itemId, itemName, photos }: { itemId: string; itemN
   return (
     <section className="surface p-5">
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <h2 className="text-base font-semibold text-white">Photos</h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            {photos.length === 0 ? `Up to ${MAX_PHOTOS_PER_ITEM}. The first one is the cover.` : `${photos.length} of ${MAX_PHOTOS_PER_ITEM} · the cover goes on every listing`}
+            {photos.length === 0 ? `Up to ${MAX_PHOTOS_PER_ITEM}. The first is the cover.` : `${photos.length} of ${MAX_PHOTOS_PER_ITEM} · the cover goes on every listing`}
           </p>
         </div>
         {photos.length < MAX_PHOTOS_PER_ITEM && <PhotoUploader itemId={itemId} compact={photos.length > 0} />}

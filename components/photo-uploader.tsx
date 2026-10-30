@@ -40,11 +40,11 @@ function Buttons({ compact, onLibrary, onCamera }: { compact: boolean; onLibrary
     );
   }
   return (
-    <div className="flex gap-1.5">
+    <div className="flex shrink-0 gap-1.5">
       <button type="button" onClick={onCamera} className="btn-secondary px-2.5 sm:hidden" aria-label="Take a photo" title="Take a photo">
         <Camera size={16} />
       </button>
-      <button type="button" onClick={onLibrary} className="btn-secondary">
+      <button type="button" onClick={onLibrary} className="btn-secondary whitespace-nowrap">
         <ImagePlus size={15} /> {compact ? "Photos" : "Add photos"}
       </button>
     </div>
