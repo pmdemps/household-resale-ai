@@ -48,6 +48,9 @@ export type Listing = {
   list_price: number;
   listing_url: string | null;
   external_id: string | null;
+  /** eBay Inventory API offerId (the listing object, not a buyer offer). */
+  external_offer_id?: string | null;
+  sku?: string | null;
   listed_at: string | null;
   ended_at: string | null;
   created_at: string;
@@ -66,6 +69,27 @@ export type Offer = {
   expires_at: string | null;
   decided_at: string | null;
   note: string | null;
+  /** Marketplace id of the buyer offer (eBay BestOfferID). */
+  external_id?: string | null;
+};
+
+export type MarketplaceConnection = {
+  id: string;
+  household_id: string;
+  platform: "ebay" | "etsy";
+  environment: "sandbox" | "production";
+  account_handle: string | null;
+  external_user_id: string | null;
+  access_token_enc: string | null;
+  refresh_token_enc: string | null;
+  access_expires_at: string | null;
+  refresh_expires_at: string | null;
+  scopes: string | null;
+  status: "active" | "revoked" | "error";
+  last_error: string | null;
+  connected_by: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type Sale = {
@@ -126,6 +150,21 @@ export type Note = {
   pinned: boolean;
   created_at: string;
   updated_at: string;
+};
+
+export type ItemPhoto = {
+  id: string;
+  household_id: string;
+  item_id: string;
+  /** Object key in the public item-photos bucket: <household_id>/<item_id>/<uuid>.<ext>. */
+  storage_path: string;
+  /** 0 is the cover photo. */
+  position: number;
+  width: number | null;
+  height: number | null;
+  bytes: number | null;
+  created_by: string;
+  created_at: string;
 };
 
 /** "5m ago", "3h ago", "Oct 12". */

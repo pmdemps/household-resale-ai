@@ -32,6 +32,9 @@ export class EbayOAuthError extends Error {
 // ---------------------------------------------------------------------------
 export type OAuthState = { h: string; u: string; n: string; t: number };
 
+/** httpOnly cookie holding the nonce that must match the one inside the signed state. */
+export const EBAY_NONCE_COOKIE = "rhq_ebay_oauth_nonce";
+
 const b64url = (s: string) => Buffer.from(s, "utf8").toString("base64url");
 const unb64url = (s: string) => Buffer.from(s, "base64url").toString("utf8");
 
