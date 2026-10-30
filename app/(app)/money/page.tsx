@@ -27,8 +27,8 @@ export default async function MoneyPage() {
         <a href="/api/export?type=sales" className="btn-secondary"><Download size={15} /> Sales CSV</a>
       </header>
 
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Totals">
-        <div className={"tile col-span-2 p-4 lg:col-span-1 " + (tone === "good" ? "tile-good" : tone === "bad" ? "tile-bad" : "")}>
+      <section className="grid grid-cols-3 gap-3 lg:grid-cols-4" aria-label="Totals">
+        <div className={"tile col-span-3 p-4 lg:col-span-1 " + (tone === "good" ? "tile-good" : tone === "bad" ? "tile-bad" : "")}>
           <p className="text-xs text-slate-400">This month</p>
           <p className={"mt-1 text-3xl font-bold tracking-tight tabular-nums " + (tone === "good" ? "text-good" : tone === "bad" ? "text-bad" : "text-white")}>
             {thisMonth.sold === 0 ? money(0) : signedMoney(thisMonth.profit)}
@@ -73,20 +73,20 @@ export default async function MoneyPage() {
               <thead>
                 <tr className="text-left text-xs text-slate-500">
                   <th className="pb-2 font-normal">Listed on</th>
-                  <th className="pb-2 text-right font-normal">For sale</th>
-                  <th className="pb-2 text-right font-normal">Sold</th>
-                  <th className="hidden pb-2 text-right font-normal sm:table-cell">After fees</th>
-                  <th className="pb-2 text-right font-normal">Profit</th>
+                  <th className="pb-2 pl-3 text-right font-normal">For sale</th>
+                  <th className="pb-2 pl-3 text-right font-normal">Sold</th>
+                  <th className="hidden pb-2 pl-3 text-right font-normal sm:table-cell">After fees</th>
+                  <th className="pb-2 pl-3 text-right font-normal">Profit</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
                 {data.byPlatform.map(p => (
                   <tr key={p.platform}>
                     <td className="py-2.5 font-medium text-slate-200">{platformName(p.platform)}</td>
-                    <td className="py-2.5 text-right tabular-nums text-slate-300">{p.active}</td>
-                    <td className="py-2.5 text-right tabular-nums text-slate-300">{p.sold}</td>
-                    <td className="hidden py-2.5 text-right sm:table-cell"><MoneyText value={p.net} className="text-slate-300" /></td>
-                    <td className="py-2.5 text-right">{p.sold ? <ProfitBadge value={p.profit} /> : <span className="text-slate-500">—</span>}</td>
+                    <td className="py-2.5 pl-3 text-right tabular-nums text-slate-300">{p.active}</td>
+                    <td className="py-2.5 pl-3 text-right tabular-nums text-slate-300">{p.sold}</td>
+                    <td className="hidden py-2.5 pl-3 text-right sm:table-cell"><MoneyText value={p.net} className="text-slate-300" /></td>
+                    <td className="py-2.5 pl-3 text-right">{p.sold ? <ProfitBadge value={p.profit} /> : <span className="text-slate-500">—</span>}</td>
                   </tr>
                 ))}
               </tbody>
@@ -94,7 +94,7 @@ export default async function MoneyPage() {
           )}
         </section>
 
-        <Link href="/insights" className="tile tile-sun flex items-center gap-4 p-5 hover:brightness-[1.02]">
+        <Link href="/insights" className="tile tile-sun flex items-center gap-4 self-start p-5 hover:brightness-[1.02]">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-accent text-on-accent"><Trophy size={22} /></span>
           <span className="min-w-0 flex-1">
             <span className="block text-base font-semibold text-white">What sells best</span>
@@ -111,9 +111,9 @@ function Tile({ label, value, sub, tone }: { label: string; value: string; sub: 
   const tile = tone === "good" ? "tile-good" : tone === "bad" ? "tile-bad" : tone === "sun" ? "tile-sun" : "";
   const color = tone === "good" ? "text-good" : tone === "bad" ? "text-bad" : "text-white";
   return (
-    <div className={`tile p-4 ${tile}`}>
+    <div className={`tile p-3 sm:p-4 ${tile}`}>
       <p className="text-xs text-slate-400">{label}</p>
-      <p className={`mt-1 text-2xl font-bold tracking-tight tabular-nums ${color}`}>{value}</p>
+      <p className={`mt-1 text-xl font-bold tracking-tight tabular-nums sm:text-2xl ${color}`}>{value}</p>
       {sub && <p className="mt-1 text-xs text-slate-500">{sub}</p>}
     </div>
   );

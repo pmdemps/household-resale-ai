@@ -31,7 +31,7 @@ export function OfferCard({ offer }: { offer: OfferWithContext }) {
     <article className="surface p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="eyebrow">{platformName(offer.listing.platform)} offer</p>
+          <p className="text-xs font-medium text-slate-500">Offer on {platformName(offer.listing.platform)}</p>
           <Link href={`/inventory/${offer.item.id}`} className="mt-1 block truncate text-base font-semibold text-white hover:underline">
             {offer.item.name}
           </Link>

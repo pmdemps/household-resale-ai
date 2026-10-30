@@ -10,7 +10,7 @@ const FILTERS = [
   { id: "unlisted", label: "Not listed yet" },
   { id: "listed", label: "For sale" },
   { id: "sold", label: "Sold" },
-  { id: "all", label: "Everything" },
+  { id: "all", label: "All" },
 ] as const;
 
 const STATUS_STYLE: Record<string, string> = {

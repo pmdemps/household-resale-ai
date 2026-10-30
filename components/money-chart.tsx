@@ -25,7 +25,7 @@ export function MonthlyProfitChart({ points, width = 640, height = 230, titleId 
 
   return (
     <svg viewBox={`0 0 ${width} ${height}`} className="h-auto w-full" role="img" aria-labelledby={titleId}>
-      <title id={titleId}>Profit by month for the last {points.length} months</title>
+      <title id={titleId}>{`Profit by month for the last ${points.length} months`}</title>
 
       {l.bars.filter(b => b.point.isCurrent).map(b => (
         <rect key="now" x={b.x + b.width / 2 - l.slotWidth / 2} y={l.padTop - 6} width={l.slotWidth} height={plotBottom - l.padTop + 6} rx={8} className="fill-accent/10" />
