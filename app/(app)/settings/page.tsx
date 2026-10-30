@@ -5,6 +5,7 @@ import { PLATFORMS } from "@/lib/platforms";
 import { cookies } from "next/headers";
 import { ThemePicker } from "@/components/theme-toggle";
 import { THEME_COOKIE, parseTheme } from "@/lib/theme";
+import { MarketplaceConnections } from "@/components/marketplace-connections";
 
 const EXPORTS = [
   { type: "items", label: "Inventory" },
@@ -73,6 +74,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       <form action={signOut} className="lg:hidden">
         <button className="btn-secondary w-full"><LogOut size={15} /> Sign out</button>
       </form>
+
+      <MarketplaceConnections ctx={ctx} />
 
       <section className="surface p-5">
         <h2 className="text-base font-semibold text-white">Marketplaces</h2>

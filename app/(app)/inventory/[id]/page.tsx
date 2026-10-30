@@ -11,6 +11,8 @@ import { ProfitBadge } from "@/components/money";
 import { estimateFees } from "@/lib/fees";
 import { requireHousehold } from "@/lib/household";
 import { loadPhotos } from "@/lib/photos";
+import { PostToEbay } from "@/components/post-to-ebay";
+import { isUsableConnection, loadEbayConnection } from "@/lib/ebay/connection";
 import { PLATFORMS, platformById, platformName } from "@/lib/platforms";
 import { loadMemberNames, loadNotes, loadPendingOffers } from "@/lib/queries";
 import { NoteComposer, NotesList } from "@/components/notes";
@@ -31,6 +33,7 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
     loadMemberNames(ctx),
     loadPhotos(ctx, id),
   ]);
+  const ebayConn = await loadEbayConnection(ctx.supabase, hid).catch(() => null);
   if (!itemRes.data) notFound();
   const item = itemRes.data as InventoryItem;
   const listings = (listingsRes.data ?? []) as Listing[];
@@ -91,6 +94,8 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
 
       <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
         <div className="space-y-6">
+          <PostToEbay item={item} listings={listings} hasEbayConnection={isUsableConnection(ebayConn)} photoCount={photos.length} />
+
           <section className="surface p-5">
             <h2 className="text-base font-semibold text-white">Listed on</h2>
             {listings.length === 0 && <p className="mt-2 text-sm text-slate-500">Not listed anywhere yet.</p>}
