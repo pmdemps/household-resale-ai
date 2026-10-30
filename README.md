@@ -4,7 +4,7 @@ Open-source AI-powered resale management platform for inventory tracking, deal a
 
 ## Current status
 
-**Early UI prototype.** The dashboard currently uses clearly labeled sample data and browser-memory-only demo entries. Authentication, persistent storage, live AI provider calls, marketplace integrations, and the background runner are not connected yet.
+**Stage 1: working inventory tracker.** Supabase auth, a shared household, inventory, listings per marketplace, offers with fee-aware accept/counter/decline, sales with real profit, automatic delist tasks after a sale, and CSV export. Marketplace integrations and background agents are next. See [docs/roadmap.md](docs/roadmap.md) for the staged plan and what each marketplace actually allows, and [AGENTS.md](AGENTS.md) for how AI agents work on this project.
 
 ## Product direction
 
@@ -28,12 +28,14 @@ These are planned choices, not claims that services are already configured.
 
 ## Run locally
 
-Requirements: Node.js 20 or later and npm.
+Requirements: Node.js 22.18 or later (tests use built-in TypeScript support) and npm.
 
 ```bash
 npm install
 npm run dev
 ```
+
+Checks: `npm run lint`, `npm run typecheck`, `npm test` (fee and CSV unit tests plus a migration/RLS test against in-memory Postgres), `npm run build`.
 
 Open [http://localhost:3000](http://localhost:3000).
 
