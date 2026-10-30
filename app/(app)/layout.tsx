@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LogOut, Settings, ShoppingBag } from "lucide-react";
+import { BarChart3, LogOut, Settings, ShoppingBag } from "lucide-react";
 import { BottomNav, SideNav } from "@/components/nav";
 import { signOut } from "@/app/actions";
 import { isSupabaseConfigured, requireHousehold } from "@/lib/household";
@@ -49,6 +49,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <span className="text-sm font-semibold text-white">Resale HQ</span>
           </Link>
           <div className="flex items-center gap-1">
+            <Link href="/insights" className="rounded-xl p-2 text-slate-400 hover:bg-white/[0.06] hover:text-white" aria-label="Insights"><BarChart3 size={19} /></Link>
             <ThemeQuickToggle initial={theme} />
             <Link href="/settings" className="rounded-xl p-2 text-slate-400 hover:bg-white/[0.06] hover:text-white" aria-label="Settings"><Settings size={19} /></Link>
           </div>

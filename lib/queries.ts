@@ -3,6 +3,7 @@ import type { AppContext } from "@/lib/household";
 import type { OfferWithContext } from "@/components/offer-card";
 import type { AgentTask, InventoryItem, Listing, Note, Sale } from "@/lib/types";
 import { num } from "@/lib/types";
+import type { InsightItem } from "@/lib/insights";
 
 type Ctx = AppContext & { household: { id: string } };
 
@@ -137,4 +138,41 @@ export async function loadNotes(ctx: Ctx, opts: { itemId?: string; limit?: numbe
   const { data, error } = await q;
   if (error) throw new Error(error.message);
   return (data ?? []) as (Note & { inventory_items: { id: string; name: string } | null })[];
+}
+
+/** Items shaped for lib/insights.ts. */
+export async function loadInsightItems(ctx: Ctx): Promise<InsightItem[]> {
+  const { data, error } = await ctx.supabase
+    .from("inventory_items")
+    .select("id, name, brand, category, status, purchase_cost, created_at, listings(platform, listed_at), sales(platform, sold_at, sale_price, shipping_charged, platform_fees, shipping_cost, other_costs)")
+    .eq("household_id", ctx.household.id)
+    .limit(5000);
+  if (error) throw new Error(error.message);
+  type Row = {
+    id: string; name: string; brand: string | null; category: string; status: string; purchase_cost: number; created_at: string;
+    listings: { platform: string; listed_at: string | null }[];
+    sales: Sale[] | Sale | null;
+  };
+  return ((data ?? []) as unknown as Row[]).map(r => {
+    const s = Array.isArray(r.sales) ? r.sales[0] : r.sales;
+    const listedTimes = r.listings.map(l => l.listed_at).filter((x): x is string => Boolean(x)).sort();
+    return {
+      id: r.id,
+      name: r.name,
+      brand: r.brand,
+      category: r.category,
+      status: r.status,
+      purchaseCost: num(r.purchase_cost),
+      createdAt: r.created_at,
+      firstListedAt: listedTimes[0] ?? null,
+      platforms: [...new Set(r.listings.map(l => l.platform))],
+      sale: s
+        ? {
+            platform: s.platform,
+            soldAt: s.sold_at,
+            payout: num(s.sale_price) + num(s.shipping_charged) - num(s.platform_fees) - num(s.shipping_cost) - num(s.other_costs),
+          }
+        : null,
+    };
+  });
 }
