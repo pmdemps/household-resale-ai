@@ -8,7 +8,7 @@ export default async function NewItemPage({ searchParams }: { searchParams: Prom
   return (
     <div className="mx-auto max-w-2xl space-y-5">
       <header>
-        <Link href="/inventory" className="text-sm text-accent hover:underline">← Inventory</Link>
+        <Link href="/inventory" className="text-sm text-link hover:underline">← Stuff</Link>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white">Add an item</h1>
       </header>
       {added && (

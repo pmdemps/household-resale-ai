@@ -39,7 +39,7 @@ export default function LoginPage() {
 
   return <main className="flex min-h-screen items-center justify-center px-4 py-10">
     <section className="surface w-full max-w-md p-7 sm:p-8">
-      <Link href="/" className="text-sm text-accent hover:underline">← Resale HQ</Link>
+      <Link href="/" className="text-sm text-link hover:underline">← Resale HQ</Link>
       <p className="eyebrow mt-7">Household Resale AI</p>
       <h1 className="mt-2 text-2xl font-semibold text-white">{mode === "signin" ? "Welcome back" : "Create your account"}</h1>
       <p className="mt-2 text-sm leading-6 text-slate-400">Sign in to your workspace. Your inventory will be protected by account-level database policies.</p>

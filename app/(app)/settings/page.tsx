@@ -5,6 +5,7 @@ import { PLATFORMS } from "@/lib/platforms";
 import { cookies } from "next/headers";
 import { ThemePicker } from "@/components/theme-toggle";
 import { THEME_COOKIE, parseTheme } from "@/lib/theme";
+import { MarketplaceConnections } from "@/components/marketplace-connections";
 
 const EXPORTS = [
   { type: "items", label: "Inventory" },
@@ -74,6 +75,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <button className="btn-secondary w-full"><LogOut size={15} /> Sign out</button>
       </form>
 
+      <MarketplaceConnections ctx={ctx} />
+
       <section className="surface p-5">
         <h2 className="text-base font-semibold text-white">Marketplaces</h2>
         <ul className="mt-3 divide-y divide-line">
@@ -81,7 +84,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <li key={p.id} className="py-3">
               <p className="text-sm text-white">
                 {p.name}
-                {p.hasAccount && <span className="ml-2 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] text-accent">account set up</span>}
+                {p.hasAccount && <span className="ml-2 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] text-link">account set up</span>}
                 <span className="ml-2 text-[11px] text-slate-500">{p.integration === "official_api" ? "API available" : p.integration === "email_only" ? "email tracking" : "manual"}</span>
               </p>
               <p className="mt-1 text-xs leading-5 text-slate-400">{p.integrationNote}</p>

@@ -1,4 +1,5 @@
-import { CATEGORIES, CONDITIONS, ITEM_STATUSES, type InventoryItem } from "@/lib/types";
+import { MAX_PHOTOS_PER_ITEM } from "@/lib/photo-url";
+import { CATEGORIES, CONDITIONS, ITEM_STATUSES, itemStatusLabel, type InventoryItem } from "@/lib/types";
 
 type Props = {
   action: (form: FormData) => Promise<void>;
@@ -57,7 +58,7 @@ export function ItemForm({ action, item }: Props) {
       {editing && (
         <Field label="Status" htmlFor="status">
           <select id="status" name="status" className="field" defaultValue={item!.status}>
-            {ITEM_STATUSES.map(s => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
+            {ITEM_STATUSES.map(s => <option key={s} value={s}>{itemStatusLabel(s)}{s === "researching" ? " (still deciding)" : ""}</option>)}
           </select>
         </Field>
       )}
@@ -65,6 +66,12 @@ export function ItemForm({ action, item }: Props) {
       <Field label="Notes" htmlFor="notes" hint="Flaws, details, anything a buyer should know">
         <textarea id="notes" name="notes" rows={3} className="field" maxLength={4000} defaultValue={item?.notes ?? ""} />
       </Field>
+
+      {!editing && (
+        <p className="text-[11px] text-slate-500">
+          Photos come next: after you save, the item page opens on <span className="text-slate-400">Add photos</span> (up to {MAX_PHOTOS_PER_ITEM}; phone photos upload straight from the browser).
+        </p>
+      )}
       <input type="hidden" name="source" value={item?.source ?? "Household"} />
 
       <div className="flex flex-wrap justify-end gap-2 border-t border-line pt-4">

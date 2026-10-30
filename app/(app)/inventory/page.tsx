@@ -1,14 +1,16 @@
 import Link from "next/link";
 import { Download, MapPin, Plus, Search } from "lucide-react";
 import { requireHousehold } from "@/lib/household";
+import { loadCoverPhotos } from "@/lib/photos";
 import { platformName } from "@/lib/platforms";
-import { money, num, type InventoryItem } from "@/lib/types";
+import { itemStatusLabel, money, num, type InventoryItem } from "@/lib/types";
+import { ItemThumb } from "@/components/item-photos";
 import { ProfitBadge } from "@/components/money";
 
 const FILTERS = [
   { id: "open", label: "To sell" },
-  { id: "unlisted", label: "Not listed" },
-  { id: "listed", label: "Listed" },
+  { id: "unlisted", label: "Not listed yet" },
+  { id: "listed", label: "For sale" },
   { id: "sold", label: "Sold" },
   { id: "all", label: "All" },
 ] as const;
@@ -16,7 +18,7 @@ const FILTERS = [
 const STATUS_STYLE: Record<string, string> = {
   draft: "bg-slate-400/10 text-slate-300",
   researching: "bg-slate-400/10 text-slate-300",
-  listed: "bg-accent/15 text-accent",
+  listed: "bg-accent/15 text-link",
   pending_sale: "bg-warn/15 text-warn",
   sold: "bg-good/15 text-good",
   returned: "bg-bad/15 text-bad",
@@ -45,6 +47,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
   if (error) throw new Error(error.message);
   type SaleLite = { sale_price: number; shipping_charged: number; platform_fees: number; shipping_cost: number; other_costs: number };
   const items = (data ?? []) as (InventoryItem & { listings: { platform: string; status: string; list_price: number }[]; sales: SaleLite[] | SaleLite | null })[];
+  const covers = await loadCoverPhotos(ctx, items.map(i => i.id));
   const profitOf = (i: (typeof items)[number]) => {
     const s = Array.isArray(i.sales) ? i.sales[0] : i.sales;
     if (!s) return null;
@@ -54,9 +57,9 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
   return (
     <div className="space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Inventory</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Stuff</h1>
         <div className="flex gap-2">
-          <a href={`/api/export?type=items`} className="btn-secondary"><Download size={16} /> CSV</a>
+          <a href={`/api/export?type=items`} className="btn-secondary" aria-label="Download as CSV"><Download size={16} /> <span className="hidden sm:inline">CSV</span></a>
           <Link href="/inventory/new" className="btn-primary"><Plus size={17} /> Add item</Link>
         </div>
       </header>
@@ -75,7 +78,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
           <Link
             key={f.id}
             href={{ pathname: "/inventory", query: { status: f.id, ...(q ? { q } : {}) } }}
-            className={"shrink-0 rounded-full px-3 py-1.5 text-sm " + (status === f.id ? "bg-white/10 text-white" : "text-slate-400 hover:text-white")}
+            className={"shrink-0 rounded-full px-3 py-1.5 text-sm " + (status === f.id ? "bg-accent/20 font-medium text-white" : "text-slate-400 hover:text-white")}
           >
             {f.label}
           </Link>
@@ -84,7 +87,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
 
       {items.length === 0 ? (
         <div className="surface p-8 text-center text-sm text-slate-400">
-          Nothing here yet. <Link href="/inventory/new" className="text-accent hover:underline">Add an item</Link>
+          Nothing here yet. <Link href="/inventory/new" className="text-link hover:underline">Add an item</Link>
         </div>
       ) : (
         <ul className="surface divide-y divide-line">
@@ -92,7 +95,8 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
             const live = item.listings.filter(l => ["active", "paused", "draft"].includes(l.status));
             return (
               <li key={item.id}>
-                <Link href={`/inventory/${item.id}`} className="flex items-center gap-4 px-4 py-3.5 hover:bg-white/[0.03]">
+                <Link href={`/inventory/${item.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-white/[0.03] sm:gap-4">
+                  <ItemThumb src={covers.get(item.id)} alt="" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-white">{item.name}</p>
                     <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-slate-400">
@@ -101,11 +105,11 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
                       {item.storage_location && <span className="inline-flex items-center gap-1">· <MapPin size={11} />{item.storage_location}</span>}
                     </p>
                     {live.length > 0 && (
-                      <p className="mt-1 text-[11px] text-slate-500">{live.map(l => `${platformName(l.platform)} ${money(num(l.list_price))}`).join(" · ")}</p>
+                      <p className="mt-1 text-[11px] text-slate-500">{"On " + live.map(l => `${platformName(l.platform)} ${money(num(l.list_price))}`).join(", ")}</p>
                     )}
                   </div>
                   <div className="shrink-0 text-right">
-                    <span className={"rounded-full px-2 py-0.5 text-[11px] " + (STATUS_STYLE[item.status] ?? "")}>{item.status.replace("_", " ")}</span>
+                    <span className={"rounded-full px-2 py-0.5 text-[11px] font-medium " + (STATUS_STYLE[item.status] ?? "")}>{itemStatusLabel(item.status)}</span>
                     {item.status === "sold" && profitOf(item) !== null ? (
                       <div className="mt-1"><ProfitBadge value={profitOf(item)!} /></div>
                     ) : (
@@ -118,7 +122,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
           })}
         </ul>
       )}
-      <p className="text-xs text-slate-500">{items.length} item{items.length === 1 ? "" : "s"}</p>
+      <p className="text-xs text-slate-500">{items.length} thing{items.length === 1 ? "" : "s"}</p>
     </div>
   );
 }

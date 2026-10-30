@@ -13,6 +13,8 @@ export type OfferWithContext = {
   buyer_handle: string | null;
   received_at: string;
   note: string | null;
+  /** Marketplace id of the offer (eBay BestOfferID) when it was pulled in through an API; null for offers typed in by hand. */
+  external_id?: string | null;
   listing: { id: string; platform: string; list_price: number; listing_url: string | null };
   item: { id: string; name: string; purchase_cost: number; floor_price: number | null };
 };
@@ -31,12 +33,12 @@ export function OfferCard({ offer }: { offer: OfferWithContext }) {
     <article className="surface p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="eyebrow">{platformName(offer.listing.platform)} offer</p>
+          <p className="text-xs font-medium text-slate-500">Offer on {platformName(offer.listing.platform)}</p>
           <Link href={`/inventory/${offer.item.id}`} className="mt-1 block truncate text-base font-semibold text-white hover:underline">
             {offer.item.name}
           </Link>
           <p className="mt-1 text-sm text-slate-400">
-            Listed at {money(listPrice)} · offer {money(amount)}
+            Asking {money(listPrice)}, offered {money(amount)}
             {pctOff > 0 && <span className="text-slate-500"> ({pctOff}% off)</span>}
             {offer.buyer_handle && <span className="text-slate-500"> · from {offer.buyer_handle}</span>}
           </p>
@@ -59,12 +61,12 @@ export function OfferCard({ offer }: { offer: OfferWithContext }) {
           <FeeBreakdown estimate={atOffer} itemCost={cost} compact />
         </div>
         <div className="hidden sm:block">
-          <p className="mb-1.5 text-xs text-slate-400">At your list price {money(listPrice)}</p>
+          <p className="mb-1.5 text-xs text-slate-400">At your asking price {money(listPrice)}</p>
           <FeeBreakdown estimate={atList} itemCost={cost} compact />
         </div>
       </div>
       <p className="mt-2 text-xs text-slate-500 sm:hidden">
-        At your list price you&apos;d receive {money(atList.payout)} ({money(atList.payout - atOffer.payout)} more).
+        At your asking price you&apos;d get {money(atList.payout)} after fees ({money(atList.payout - atOffer.payout)} more).
       </p>
 
       <div className="mt-4 flex flex-wrap gap-2">
@@ -95,8 +97,14 @@ export function OfferCard({ offer }: { offer: OfferWithContext }) {
         </form>
       </div>
       <p className="mt-2 text-[11px] text-slate-500">
-        This records your decision here. Until the {platformName(offer.listing.platform)} integration is live, also tap the same button in the
-        {" "}{platformName(offer.listing.platform)} app{offer.listing.listing_url ? <> (<a className="text-accent hover:underline" href={offer.listing.listing_url} target="_blank" rel="noreferrer">open listing</a>)</> : ""}.
+        {offer.listing.platform === "ebay" && offer.external_id ? (
+          <>This offer came from eBay, so your answer is sent to eBay for you. If that fails you&apos;ll see a note in To do asking you to do it in the eBay app too.</>
+        ) : (
+          <>
+            This records your decision here. Until the {platformName(offer.listing.platform)} integration is live, also tap the same button in the
+            {" "}{platformName(offer.listing.platform)} app{offer.listing.listing_url ? <> (<a className="text-link hover:underline" href={offer.listing.listing_url} target="_blank" rel="noreferrer">open listing</a>)</> : ""}.
+          </>
+        )}
       </p>
     </article>
   );

@@ -11,10 +11,10 @@ export function FeeBreakdown({ estimate, itemCost, compact = false }: { estimate
         {estimate.lines.map(l => <Row key={l.label} label={l.label} value={"− " + money(l.amount)} muted />)}
         {estimate.sellerShippingCost > 0 && <Row label="Shipping label you pay" value={"− " + money(estimate.sellerShippingCost)} muted />}
         <div className="my-2 border-t border-line" />
-        <Row label="You receive" value={money(estimate.payout)} strong tone={estimate.payout < 0 ? "bad" : itemCost ? undefined : estimate.payout > 0 ? "good" : undefined} />
+        <Row label="You get after fees" value={money(estimate.payout)} strong tone={estimate.payout < 0 ? "bad" : itemCost ? undefined : estimate.payout > 0 ? "good" : undefined} />
         {itemCost !== undefined && itemCost > 0 && (
           <>
-            <Row label="Item cost" value={"− " + money(itemCost)} muted />
+            <Row label="What you paid for it" value={"− " + money(itemCost)} muted />
             <Row label="Profit" value={money(estimate.profit)} strong tone={estimate.profit >= 0 ? "good" : "bad"} />
           </>
         )}

@@ -4,11 +4,12 @@ import type { OfferWithContext } from "@/components/offer-card";
 import type { AgentTask, InventoryItem, Listing, Note, Sale } from "@/lib/types";
 import { num } from "@/lib/types";
 import type { InsightItem } from "@/lib/insights";
+import { byPlatform as platformRows, monthlyProfit, saleNet, saleProfit, summarize } from "@/lib/money";
 
 type Ctx = AppContext & { household: { id: string } };
 
 type RawOffer = {
-  id: string; amount: number; buyer_handle: string | null; received_at: string; note: string | null;
+  id: string; amount: number; buyer_handle: string | null; received_at: string; note: string | null; external_id: string | null;
   listings: {
     id: string; platform: string; list_price: number; listing_url: string | null;
     inventory_items: { id: string; name: string; purchase_cost: number; floor_price: number | null };
@@ -18,7 +19,7 @@ type RawOffer = {
 export async function loadPendingOffers(ctx: Ctx, itemId?: string): Promise<OfferWithContext[]> {
   let q = ctx.supabase
     .from("offers")
-    .select("id, amount, buyer_handle, received_at, note, listings!inner(id, platform, list_price, listing_url, item_id, inventory_items!inner(id, name, purchase_cost, floor_price))")
+    .select("id, amount, buyer_handle, received_at, note, external_id, listings!inner(id, platform, list_price, listing_url, item_id, inventory_items!inner(id, name, purchase_cost, floor_price))")
     .eq("household_id", ctx.household.id)
     .eq("status", "pending")
     .order("received_at", { ascending: false });
@@ -31,6 +32,7 @@ export async function loadPendingOffers(ctx: Ctx, itemId?: string): Promise<Offe
     buyer_handle: o.buyer_handle,
     received_at: o.received_at,
     note: o.note,
+    external_id: o.external_id ?? null,
     listing: { id: o.listings.id, platform: o.listings.platform, list_price: num(o.listings.list_price), listing_url: o.listings.listing_url },
     item: {
       id: o.listings.inventory_items.id,
@@ -60,37 +62,20 @@ export async function loadOverview(ctx: Ctx) {
   const unsold = itemRows.filter(i => !["sold", "donated", "discarded", "returned"].includes(i.status));
   const active = listingRows.filter(l => l.status === "active");
   const revenue = saleRows.reduce((s, x) => s + num(x.sale_price) + num(x.shipping_charged), 0);
-  const payout = saleRows.reduce(
-    (s, x) => s + num(x.sale_price) + num(x.shipping_charged) - num(x.platform_fees) - num(x.shipping_cost) - num(x.other_costs),
-    0,
-  );
-  const profit = saleRows.reduce(
-    (s, x) => s + num(x.sale_price) + num(x.shipping_charged) - num(x.platform_fees) - num(x.shipping_cost) - num(x.other_costs) - (costById.get(x.item_id) ?? 0),
-    0,
-  );
-  const byPlatform = new Map<string, { active: number; sold: number; payout: number }>();
-  for (const l of active) {
-    const e = byPlatform.get(l.platform) ?? { active: 0, sold: 0, payout: 0 };
-    e.active++;
-    byPlatform.set(l.platform, e);
-  }
-  for (const s of saleRows) {
-    const e = byPlatform.get(s.platform) ?? { active: 0, sold: 0, payout: 0 };
-    e.sold++;
-    e.payout += num(s.sale_price) + num(s.shipping_charged) - num(s.platform_fees) - num(s.shipping_cost) - num(s.other_costs);
-    byPlatform.set(s.platform, e);
-  }
+  const payout = saleRows.reduce((s, x) => s + saleNet(x), 0);
+  const profit = saleRows.reduce((s, x) => s + saleProfit(x, costById.get(x.item_id) ?? 0), 0);
+  const byPlatform = platformRows(saleRows, active, costById).map(r => ({ platform: r.platform, active: r.active, sold: r.sold, payout: r.net, profit: r.profit }));
+  const months = summarize(monthlyProfit(saleRows, costById, { months: 2 }));
 
   const nameById = new Map(itemRows.map(i => [i.id, i.name]));
-  const salePayout = (x: Sale) => num(x.sale_price) + num(x.shipping_charged) - num(x.platform_fees) - num(x.shipping_cost) - num(x.other_costs);
   const recentSales = saleRows.slice(0, 6).map(x => ({
     id: x.id,
     itemId: x.item_id,
     name: nameById.get(x.item_id) ?? "Item",
     platform: x.platform,
     soldAt: x.sold_at,
-    payout: salePayout(x),
-    profit: salePayout(x) - (costById.get(x.item_id) ?? 0),
+    payout: saleNet(x),
+    profit: saleProfit(x, costById.get(x.item_id) ?? 0),
   }));
 
   // Newest unlisted items, so something just added is visible on the overview, not only counted.
@@ -112,9 +97,38 @@ export async function loadOverview(ctx: Ctx) {
     revenue,
     payout,
     profit,
-    byPlatform: [...byPlatform.entries()].map(([platform, v]) => ({ platform, ...v })),
+    /** This calendar month vs last, for the "How are we doing?" hero. */
+    thisMonth: months.thisMonth,
+    lastMonth: months.lastMonth,
+    byPlatform,
     tasks: (tasks.data ?? []) as AgentTask[],
     activity: activity.data ?? [],
+  };
+}
+
+/** Everything the Money page shows: month-by-month profit, totals, and the per-platform table. */
+export async function loadMoney(ctx: Ctx, opts: { months?: number } = {}) {
+  const hid = ctx.household.id;
+  const [items, listings, sales] = await Promise.all([
+    ctx.supabase.from("inventory_items").select("id, purchase_cost").eq("household_id", hid),
+    ctx.supabase.from("listings").select("platform, status").eq("household_id", hid).eq("status", "active"),
+    ctx.supabase.from("sales").select("*").eq("household_id", hid).order("sold_at", { ascending: false }),
+  ]);
+  for (const r of [items, listings, sales]) if (r.error) throw new Error(r.error.message);
+  const costById = new Map(((items.data ?? []) as Pick<InventoryItem, "id" | "purchase_cost">[]).map(i => [i.id, num(i.purchase_cost)]));
+  const saleRows = (sales.data ?? []) as Sale[];
+  const active = ((listings.data ?? []) as Pick<Listing, "platform" | "status">[]).filter(l => l.status === "active");
+  const months = monthlyProfit(saleRows, costById, { months: opts.months ?? 12 });
+  return {
+    months,
+    summary: summarize(months),
+    totals: {
+      sold: saleRows.length,
+      profit: saleRows.reduce((s, x) => s + saleProfit(x, costById.get(x.item_id) ?? 0), 0),
+      net: saleRows.reduce((s, x) => s + saleNet(x), 0),
+      revenue: saleRows.reduce((s, x) => s + num(x.sale_price) + num(x.shipping_charged), 0),
+    },
+    byPlatform: platformRows(saleRows, active, costById),
   };
 }
 

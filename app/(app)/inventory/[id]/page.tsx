@@ -5,21 +5,25 @@ import { addListing, recordOffer, recordSale, updateItem, updateListing } from "
 import { FeeBreakdown } from "@/components/fee-breakdown";
 import { FeeCalculator } from "@/components/fee-calculator";
 import { ItemForm } from "@/components/item-form";
+import { ItemPhotos } from "@/components/item-photos";
 import { OfferCard } from "@/components/offer-card";
 import { ProfitBadge } from "@/components/money";
 import { estimateFees } from "@/lib/fees";
 import { requireHousehold } from "@/lib/household";
+import { loadPhotos } from "@/lib/photos";
+import { PostToEbay } from "@/components/post-to-ebay";
+import { isUsableConnection, loadEbayConnection } from "@/lib/ebay/connection";
 import { PLATFORMS, platformById, platformName } from "@/lib/platforms";
 import { loadMemberNames, loadNotes, loadPendingOffers } from "@/lib/queries";
 import { NoteComposer, NotesList } from "@/components/notes";
-import { money, num, type InventoryItem, type Listing, type Offer, type Sale } from "@/lib/types";
+import { itemStatusLabel, listingStatusLabel, money, num, offerStatusLabel, type InventoryItem, type Listing, type Offer, type Sale } from "@/lib/types";
 
-export default async function ItemPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+export default async function ItemPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string }> }) {
+  const [{ id }, { saved }] = await Promise.all([params, searchParams]);
   const ctx = await requireHousehold();
   const hid = ctx.household.id;
 
-  const [itemRes, listingsRes, offersRes, saleRes, pending, comments, names] = await Promise.all([
+  const [itemRes, listingsRes, offersRes, saleRes, pending, comments, names, photos] = await Promise.all([
     ctx.supabase.from("inventory_items").select("*").eq("household_id", hid).eq("id", id).maybeSingle(),
     ctx.supabase.from("listings").select("*").eq("household_id", hid).eq("item_id", id).order("created_at"),
     ctx.supabase.from("offers").select("*, listings!inner(item_id, platform)").eq("household_id", hid).eq("listings.item_id", id).neq("status", "pending").order("received_at", { ascending: false }),
@@ -27,7 +31,9 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
     loadPendingOffers(ctx, id),
     loadNotes(ctx, { itemId: id }),
     loadMemberNames(ctx),
+    loadPhotos(ctx, id),
   ]);
+  const ebayConn = await loadEbayConnection(ctx.supabase, hid).catch(() => null);
   if (!itemRes.data) notFound();
   const item = itemRes.data as InventoryItem;
   const listings = (listingsRes.data ?? []) as Listing[];
@@ -41,11 +47,12 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
   return (
     <div className="space-y-6">
       <header>
-        <Link href="/inventory" className="text-sm text-accent hover:underline">← Inventory</Link>
+        <Link href="/inventory" className="text-sm text-link hover:underline">← Stuff</Link>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-2xl font-semibold tracking-tight text-white">{item.name}</h1>
             <p className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-slate-400">
+              <span className={"rounded-full px-2 py-0.5 text-xs font-medium " + (isSold ? "bg-good/15 text-good" : item.status === "listed" ? "bg-accent/20 text-link" : item.status === "pending_sale" ? "bg-warn/15 text-warn" : "bg-white/[0.06] text-slate-300")}>{itemStatusLabel(item.status)}</span>
               <span>{item.category}</span>
               {item.brand && <span>· {item.brand}</span>}
               {item.size && <span>· {item.size}</span>}
@@ -60,6 +67,8 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
         </div>
       </header>
 
+      <ItemPhotos householdId={hid} itemId={item.id} itemName={item.name} photos={photos} justCreated={saved === "1"} />
+
       {sale && (
         <section className="surface p-5">
           <h2 className="text-base font-semibold text-white">Sold on {platformName(sale.platform)}</h2>
@@ -69,7 +78,7 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
             <Metric label="Fees" value={money(num(sale.platform_fees))} />
             <Metric label="Shipping you paid" value={money(num(sale.shipping_cost))} />
             <div>
-              <dt className="text-xs text-slate-500">Profit</dt>
+              <dt className="text-xs text-slate-500">Profit after what you paid</dt>
               <dd className="mt-1"><ProfitBadge size="md" value={num(sale.sale_price) + num(sale.shipping_charged) - num(sale.platform_fees) - num(sale.shipping_cost) - num(sale.other_costs) - cost} /></dd>
             </div>
           </dl>
@@ -78,25 +87,27 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
 
       {pending.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-white">Pending offers</h2>
+          <h2 className="text-lg font-semibold text-white">Offers waiting on you</h2>
           {pending.map(o => <OfferCard key={o.id} offer={o} />)}
         </section>
       )}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
         <div className="space-y-6">
+          <PostToEbay item={item} listings={listings} hasEbayConnection={isUsableConnection(ebayConn)} photoCount={photos.length} />
+
           <section className="surface p-5">
-            <h2 className="text-base font-semibold text-white">Listings</h2>
+            <h2 className="text-base font-semibold text-white">Listed on</h2>
             {listings.length === 0 && <p className="mt-2 text-sm text-slate-500">Not listed anywhere yet.</p>}
             <ul className="mt-3 space-y-3">
               {listings.map(l => (
                 <li key={l.id} className="rounded-xl border border-line p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="font-medium text-white">
-                      {platformName(l.platform)} <span className="ml-1 text-xs font-normal text-slate-400">{l.status}</span>
+                      {platformName(l.platform)} <span className="ml-1 text-xs font-normal text-slate-400">{listingStatusLabel(l.status)}</span>
                     </p>
                     {l.listing_url && (
-                      <a href={l.listing_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-accent hover:underline">Open <ExternalLink size={12} /></a>
+                      <a href={l.listing_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-link hover:underline">Open <ExternalLink size={12} /></a>
                     )}
                   </div>
                   {["draft", "active", "paused"].includes(l.status) && (
@@ -111,12 +122,12 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
                           <input name="listing_url" type="url" defaultValue={l.listing_url ?? ""} className="field mt-1" placeholder="https://" />
                         </label>
                         <select name="status" defaultValue={l.status} className="field w-28" aria-label="Listing status">
-                          <option value="draft">draft</option><option value="active">active</option><option value="paused">paused</option><option value="ended">ended</option>
+                          <option value="draft">Draft</option><option value="active">Live</option><option value="paused">Paused</option><option value="ended">Ended</option>
                         </select>
                         <button className="btn-secondary">Save</button>
                       </form>
                       <details className="mt-3 text-sm">
-                        <summary className="cursor-pointer text-xs text-accent">Got an offer or a sale?</summary>
+                        <summary className="cursor-pointer text-xs text-link">Got an offer or a sale?</summary>
                         <div className="mt-3 grid gap-3 sm:grid-cols-2">
                           <form action={recordOffer} className="space-y-2 rounded-lg border border-line p-3">
                             <p className="text-xs font-medium text-slate-300">Record an offer</p>
@@ -179,7 +190,7 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
                 {pastOffers.map(o => (
                   <li key={o.id} className="flex justify-between py-2">
                     <span className="text-slate-300">{platformName(o.listings.platform)} · {money(num(o.amount))}{o.counter_amount !== null ? ` → countered ${money(num(o.counter_amount))}` : ""}</span>
-                    <span className="text-xs text-slate-500">{o.status}</span>
+                    <span className="text-xs text-slate-500">{offerStatusLabel(o.status)}</span>
                   </li>
                 ))}
               </ul>

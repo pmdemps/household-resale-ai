@@ -29,7 +29,7 @@ export default async function NotesPage({ searchParams }: { searchParams: Promis
       <nav className="flex gap-1">
         {VIEWS.map(v => (
           <Link key={v.id} href={{ pathname: "/notes", query: v.id === "all" ? {} : { view: v.id } }}
-            className={"rounded-full px-3 py-1.5 text-sm " + (view === v.id ? "bg-white/10 text-white" : "text-slate-400 hover:text-white")}>
+            className={"rounded-full px-3 py-1.5 text-sm " + (view === v.id ? "bg-accent/20 font-medium text-white" : "text-slate-400 hover:text-white")}>
             {v.label}
           </Link>
         ))}
