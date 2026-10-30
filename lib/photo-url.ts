@@ -1,17 +1,57 @@
-// Pure helpers for item photos: no Supabase, no React, so they can be unit-tested with node --test.
-// Server-side loading/uploading lives in lib/photos.ts.
+// Pure helpers for item photos: no Supabase, no React, no DOM, so they can be unit-tested with node --test
+// and imported from both the browser uploader (lib/photo-client.ts) and the server (lib/photos.ts).
 
 export const PHOTO_BUCKET = "item-photos";
+/** Largest file the browser may send as-is when it cannot re-encode it (also the bucket's file_size_limit). */
 export const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 export const MAX_PHOTOS_PER_ITEM = 12;
+/** Photos are downscaled in the browser so the longest side is at most this many pixels. */
+export const MAX_PHOTO_EDGE = 2000;
+/** JPEG quality for the browser re-encode (0.86 keeps a 2000px photo around 0.5-1.5 MB). */
+export const PHOTO_JPEG_QUALITY = 0.86;
 
-/** Accepted upload types (must match the bucket's allowed_mime_types) and the file extension stored for each. */
+/** Types that may be stored, and the file extension used for each. Must match the bucket's allowed_mime_types. */
 export const PHOTO_TYPES: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
   "image/webp": "webp",
-  "image/heic": "heic",
 };
+
+const UUID_RE = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+
+/**
+ * Object key for a new photo: <household_id>/<item_id>/<random uuid>.<ext>. Storage RLS trusts the first
+ * segment (the member's household); recordItemPhoto re-checks the whole shape with isValidPhotoPath.
+ */
+export function photoStoragePath(householdId: string, itemId: string, uuid: string, ext: string): string {
+  return `${householdId}/${itemId}/${uuid}.${ext}`;
+}
+
+/**
+ * True when `path` is exactly `<householdId>/<itemId>/<uuid>.<jpg|jpeg|png|webp>` for the given ids
+ * (case-sensitive, lower-case uuid, no extra segments). The server uses this before recording a row,
+ * so a client can only ever attach objects from its own household's folder for the item it names.
+ */
+export function isValidPhotoPath(path: string, householdId: string, itemId: string): boolean {
+  if (!isUuid(householdId) || !isUuid(itemId)) return false;
+  if (typeof path !== "string" || path.length > 200) return false;
+  const re = new RegExp(`^${householdId}/${itemId}/${UUID_RE}\\.(jpg|jpeg|png|webp)$`);
+  return re.test(path);
+}
+
+export function isUuid(value: string): boolean {
+  return typeof value === "string" && new RegExp(`^${UUID_RE}$`).test(value);
+}
+
+/** Target size for an image so that its longest side is at most `maxEdge`, keeping the aspect ratio. */
+export function fitWithin(width: number, height: number, maxEdge: number = MAX_PHOTO_EDGE): { width: number; height: number } {
+  const w = Math.max(1, Math.round(width));
+  const h = Math.max(1, Math.round(height));
+  const longest = Math.max(w, h);
+  if (longest <= maxEdge) return { width: w, height: h };
+  const scale = maxEdge / longest;
+  return { width: Math.max(1, Math.round(w * scale)), height: Math.max(1, Math.round(h * scale)) };
+}
 
 /**
  * Public HTTPS URL for a photo in the item-photos bucket. Marketplaces fetch listing images from this.
@@ -25,11 +65,12 @@ export function photoUrl(baseUrl: string, storagePath: string): string {
   return `${base}/storage/v1/object/public/${PHOTO_BUCKET}/${path}`;
 }
 
-/** Normalises what a browser reports (image/jpg, image/heif…) to one of PHOTO_TYPES, or null. */
+/** Normalises what a browser reports (image/jpg, image/heif…) to a canonical type, or null. HEIC is
+ *  recognised (so messages can name it) but is not in PHOTO_TYPES: the browser converts it to JPEG first. */
 export function normalizePhotoType(mime: string | null | undefined): string | null {
   const m = (mime ?? "").toLowerCase().split(";")[0].trim();
   if (m === "image/jpg" || m === "image/pjpeg") return "image/jpeg";
-  if (m === "image/heif") return "image/heic";
+  if (m === "image/heif" || m === "image/heic") return "image/heic";
   return m in PHOTO_TYPES ? m : null;
 }
 

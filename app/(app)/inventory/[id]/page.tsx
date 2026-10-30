@@ -18,8 +18,8 @@ import { loadMemberNames, loadNotes, loadPendingOffers } from "@/lib/queries";
 import { NoteComposer, NotesList } from "@/components/notes";
 import { itemStatusLabel, listingStatusLabel, money, num, offerStatusLabel, type InventoryItem, type Listing, type Offer, type Sale } from "@/lib/types";
 
-export default async function ItemPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+export default async function ItemPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string }> }) {
+  const [{ id }, { saved }] = await Promise.all([params, searchParams]);
   const ctx = await requireHousehold();
   const hid = ctx.household.id;
 
@@ -67,7 +67,7 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
         </div>
       </header>
 
-      <ItemPhotos itemId={item.id} itemName={item.name} photos={photos} />
+      <ItemPhotos householdId={hid} itemId={item.id} itemName={item.name} photos={photos} justCreated={saved === "1"} />
 
       {sale && (
         <section className="surface p-5">

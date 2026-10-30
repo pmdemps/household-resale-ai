@@ -1,7 +1,6 @@
 import "server-only";
-import { randomUUID } from "node:crypto";
 import type { AppContext } from "@/lib/household";
-import { imageDimensions, MAX_PHOTO_BYTES, MAX_PHOTOS_PER_ITEM, normalizePhotoType, PHOTO_BUCKET, PHOTO_TYPES, photoUrl, sniffImageType } from "@/lib/photo-url";
+import { isValidPhotoPath, MAX_PHOTOS_PER_ITEM, normalizePhotoType, PHOTO_BUCKET, PHOTO_TYPES, photoUrl } from "@/lib/photo-url";
 import type { ItemPhoto } from "@/lib/types";
 
 type Ctx = AppContext & { household: { id: string }; userId: string };
@@ -15,11 +14,6 @@ export function publicPhotoUrl(storagePath: string): string {
 }
 
 const withUrl = (p: ItemPhoto): ItemPhotoWithUrl => ({ ...p, url: publicPhotoUrl(p.storage_path) });
-
-/** Files from a multipart form field, skipping the empty entry browsers send for an untouched file input. */
-export function filesFrom(form: FormData, key = "files"): File[] {
-  return form.getAll(key).filter((f): f is File => typeof f === "object" && f !== null && "arrayBuffer" in f && (f as File).size > 0);
-}
 
 /** All photos of one item, cover first. */
 export async function loadPhotos(ctx: Ctx, itemId: string): Promise<ItemPhotoWithUrl[]> {
@@ -52,83 +46,93 @@ export async function loadCoverPhotos(ctx: Ctx, itemIds: string[]): Promise<Map<
   return covers;
 }
 
+export type RecordPhotoInput = {
+  itemId: string;
+  /** Object key the browser uploaded to: <household_id>/<item_id>/<uuid>.<jpg|jpeg|png|webp>. */
+  storagePath: string;
+  width: number | null;
+  height: number | null;
+  bytes: number | null;
+  contentType: string | null;
+};
+
 /**
- * Validates and stores uploaded files for an item: checks the real image type and size, uploads to
- * <household>/<item>/<uuid>.<ext> with the user's JWT (storage RLS applies), inserts item_photos rows
- * after the existing ones, and logs "photo_added". HEIC is stored as-is (no conversion).
+ * Records a photo the browser has already uploaded to the item-photos bucket (components/photo-uploader.tsx
+ * does the resize + upload with the member's JWT, so storage RLS has already limited the path to the
+ * member's household folder). This re-checks the full path shape for THIS household and item, enforces
+ * the per-item limit, appends the row after the existing ones and logs "photo_added". When the row cannot
+ * be written the uploaded object is removed (best-effort) so nothing orphaned stays in the bucket.
  */
-export async function attachPhotos(ctx: Ctx, itemId: string, files: File[]): Promise<ItemPhotoWithUrl[]> {
+export async function recordPhoto(ctx: Ctx, input: RecordPhotoInput): Promise<ItemPhotoWithUrl> {
   const hid = ctx.household.id;
-  const real = files.filter(f => f.size > 0);
-  if (real.length === 0) return [];
+  const { itemId, storagePath } = input;
+  if (!isValidPhotoPath(storagePath, hid, itemId)) throw new Error("That upload doesn't belong to this item.");
+  const ext = storagePath.slice(storagePath.lastIndexOf(".") + 1).replace(/^jpeg$/, "jpg");
+  const type = normalizePhotoType(input.contentType);
+  if (!type || PHOTO_TYPES[type] !== ext) {
+    await discardObject(ctx, storagePath);
+    throw new Error("The photo's type doesn't match its file name.");
+  }
 
   const { data: item, error: itemErr } = await ctx.supabase.from("inventory_items").select("id").eq("household_id", hid).eq("id", itemId).maybeSingle();
   if (itemErr) throw new Error(itemErr.message);
-  if (!item) throw new Error("That item isn't in your household.");
+  if (!item) {
+    await discardObject(ctx, storagePath);
+    throw new Error("That item isn't in your household.");
+  }
 
   const { data: existing, error: existingErr } = await ctx.supabase.from("item_photos").select("position").eq("household_id", hid).eq("item_id", itemId);
   if (existingErr) throw new Error(existingErr.message);
-  if ((existing?.length ?? 0) + real.length > MAX_PHOTOS_PER_ITEM) {
-    throw new Error(`Up to ${MAX_PHOTOS_PER_ITEM} photos per item (this one has ${existing?.length ?? 0}).`);
+  const count = existing?.length ?? 0;
+  if (count >= MAX_PHOTOS_PER_ITEM) {
+    await discardObject(ctx, storagePath);
+    throw new Error(`Up to ${MAX_PHOTOS_PER_ITEM} photos per item (this one already has ${count}).`);
   }
-  let position = (existing ?? []).reduce((m, p) => Math.max(m, Number(p.position) + 1), 0);
+  const position = (existing ?? []).reduce((m, p) => Math.max(m, Number(p.position) + 1), 0);
 
-  // Check everything before uploading anything, so a bad file in a batch doesn't leave half of it stored.
-  const prepared = await Promise.all(
-    real.map(async file => {
-      if (file.size > MAX_PHOTO_BYTES) throw new Error(`"${file.name}" is over 10 MB. Try a smaller photo.`);
-      const buffer = Buffer.from(await file.arrayBuffer());
-      // The bytes decide, not the browser's declared type: the bucket is public, so nothing that isn't
-      // really a JPEG/PNG/WebP/HEIC may be stored (and served) as one. normalizePhotoType only improves the message.
-      const type = sniffImageType(buffer);
-      if (!type || !(type in PHOTO_TYPES)) {
-        const claimed = normalizePhotoType(file.type);
-        throw new Error(claimed ? `"${file.name}" doesn't look like a real ${PHOTO_TYPES[claimed].toUpperCase()} file.` : `"${file.name}" isn't a JPEG, PNG, WebP or HEIC photo.`);
-      }
-      return { file, buffer, type, dims: imageDimensions(buffer, type) };
-    }),
-  );
-
-  const added: ItemPhotoWithUrl[] = [];
-  for (const { buffer, type, dims } of prepared) {
-    const path = `${hid}/${itemId}/${randomUUID()}.${PHOTO_TYPES[type]}`;
-    const { error: upErr } = await ctx.supabase.storage.from(PHOTO_BUCKET).upload(path, buffer, { contentType: type, upsert: false, cacheControl: "31536000" });
-    if (upErr) throw new Error(`Upload failed: ${upErr.message}`);
-    const { data, error } = await ctx.supabase
-      .from("item_photos")
-      .insert({ household_id: hid, item_id: itemId, storage_path: path, position: position++, width: dims?.width ?? null, height: dims?.height ?? null, bytes: buffer.byteLength, created_by: ctx.userId })
-      .select("*")
-      .single();
-    if (error) {
-      await ctx.supabase.storage.from(PHOTO_BUCKET).remove([path]);
-      throw new Error(error.message);
-    }
-    added.push(withUrl(data as ItemPhoto));
+  const { data, error } = await ctx.supabase
+    .from("item_photos")
+    .insert({
+      household_id: hid,
+      item_id: itemId,
+      storage_path: storagePath,
+      position,
+      width: positiveInt(input.width),
+      height: positiveInt(input.height),
+      bytes: input.bytes !== null && Number.isInteger(input.bytes) && input.bytes >= 0 ? input.bytes : null,
+      created_by: ctx.userId,
+    })
+    .select("*")
+    .single();
+  if (error) {
+    await discardObject(ctx, storagePath);
+    throw new Error(error.message);
   }
-
+  const row = data as ItemPhoto;
   await ctx.supabase.from("activity_log").insert({
     household_id: hid,
     actor_user: ctx.userId,
     action: "photo_added",
     entity_type: "item",
     entity_id: itemId,
-    detail: { count: added.length },
+    detail: { count: 1, photo_id: row.id, content_type: type, bytes: row.bytes, width: row.width, height: row.height },
   });
-  return added;
+  return withUrl(row);
 }
 
-/** Removes the file and the row, then closes the gap so positions stay 0..n-1 (cover = 0). */
+/** Removes the row, closes the gap so positions stay 0..n-1 (cover = 0), then deletes the file best-effort. */
 export async function removePhoto(ctx: Ctx, photoId: string): Promise<ItemPhoto | null> {
   const hid = ctx.household.id;
   const { data: photo, error } = await ctx.supabase.from("item_photos").select("*").eq("household_id", hid).eq("id", photoId).maybeSingle();
   if (error) throw new Error(error.message);
   if (!photo) return null;
   const row = photo as ItemPhoto;
-  const { error: rmErr } = await ctx.supabase.storage.from(PHOTO_BUCKET).remove([row.storage_path]);
-  if (rmErr) throw new Error(`Couldn't delete the file: ${rmErr.message}`);
   const { error: delErr } = await ctx.supabase.from("item_photos").delete().eq("household_id", hid).eq("id", row.id);
   if (delErr) throw new Error(delErr.message);
   await renumber(ctx, row.item_id);
+  // The row is what the household sees; a leftover object sits at an unguessable path and is harmless,
+  // so a storage hiccup must not fail the delete.
+  await discardObject(ctx, row.storage_path);
   await ctx.supabase.from("activity_log").insert({ household_id: hid, actor_user: ctx.userId, action: "photo_removed", entity_type: "item", entity_id: row.item_id, detail: {} });
   return row;
 }
@@ -143,6 +147,20 @@ export async function setCoverPhoto(ctx: Ctx, photoId: string): Promise<ItemPhot
   await renumber(ctx, row.item_id, row.id);
   await ctx.supabase.from("activity_log").insert({ household_id: hid, actor_user: ctx.userId, action: "photo_cover", entity_type: "item", entity_id: row.item_id, detail: { photo_id: row.id } });
   return row;
+}
+
+/** Best-effort delete of a storage object (the member's JWT; storage RLS applies). Never throws. */
+async function discardObject(ctx: Ctx, storagePath: string): Promise<void> {
+  try {
+    const { error } = await ctx.supabase.storage.from(PHOTO_BUCKET).remove([storagePath]);
+    if (error) console.warn("[photos] could not remove storage object:", error.message);
+  } catch (e) {
+    console.warn("[photos] could not remove storage object:", e instanceof Error ? e.message : e);
+  }
+}
+
+function positiveInt(n: number | null): number | null {
+  return n !== null && Number.isInteger(n) && n > 0 ? n : null;
 }
 
 async function renumber(ctx: Ctx, itemId: string, firstId?: string) {

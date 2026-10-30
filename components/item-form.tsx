@@ -68,17 +68,9 @@ export function ItemForm({ action, item }: Props) {
       </Field>
 
       {!editing && (
-        <Field label="Photos" htmlFor="files" hint={`Optional · a few now (they're saved with the item in one go), up to ${MAX_PHOTOS_PER_ITEM} in total`}>
-          <input
-            id="files"
-            name="files"
-            type="file"
-            accept="image/*"
-            multiple
-            className="field cursor-pointer py-2 file:mr-3 file:rounded-lg file:border-0 file:bg-accent/20 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-link"
-          />
-          <p className="mt-1.5 text-[11px] text-slate-500">The first photo becomes the cover. You can add more on the item page.</p>
-        </Field>
+        <p className="text-[11px] text-slate-500">
+          Photos come next: after you save, the item page opens on <span className="text-slate-400">Add photos</span> (up to {MAX_PHOTOS_PER_ITEM}; phone photos upload straight from the browser).
+        </p>
       )}
       <input type="hidden" name="source" value={item?.source ?? "Household"} />
 

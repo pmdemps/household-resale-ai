@@ -26,7 +26,7 @@ export function ItemThumb({ src, alt }: { src?: string; alt: string }) {
 }
 
 /** The Photos section on an item page: big cover, thumbnail strip with delete / make-cover, and the uploader. */
-export function ItemPhotos({ itemId, itemName, photos }: { itemId: string; itemName: string; photos: PhotoRow[] }) {
+export function ItemPhotos({ householdId, itemId, itemName, photos, justCreated = false }: { householdId: string; itemId: string; itemName: string; photos: PhotoRow[]; justCreated?: boolean }) {
   const cover = photos[0];
   return (
     <section className="surface p-5">
@@ -37,13 +37,16 @@ export function ItemPhotos({ itemId, itemName, photos }: { itemId: string; itemN
             {photos.length === 0 ? `Up to ${MAX_PHOTOS_PER_ITEM}. The first is the cover.` : `${photos.length} of ${MAX_PHOTOS_PER_ITEM} · the cover goes on every listing`}
           </p>
         </div>
-        {photos.length < MAX_PHOTOS_PER_ITEM && <PhotoUploader itemId={itemId} compact={photos.length > 0} />}
+        {photos.length < MAX_PHOTOS_PER_ITEM && <PhotoUploader householdId={householdId} itemId={itemId} photoCount={photos.length} compact={photos.length > 0} />}
       </div>
 
       {!cover ? (
         <div className="mt-4 rounded-xl border border-dashed border-line px-4 py-7 text-center">
           <ImageIcon size={26} className="mx-auto text-slate-500" aria-hidden />
-          <p className="mt-2 text-sm text-slate-400">No photos yet. Add a couple — listings with photos sell faster.</p>
+          <p className="mt-2 text-sm text-slate-400">
+            {justCreated ? "Saved. Now add photos — they're what sells it." : "No photos yet. Add a couple — listings with photos sell faster."}
+          </p>
+          <p className="mt-1 text-xs text-slate-500">Straight from your phone is fine: photos are shrunk to 2000px before they upload, and the first one becomes the cover.</p>
         </div>
       ) : (
         <>

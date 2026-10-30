@@ -53,8 +53,9 @@ grant select, insert, update, delete on public.item_photos to authenticated;
 -- ---------------------------------------------------------------------------
 -- Storage bucket (public read) and object policies
 -- ---------------------------------------------------------------------------
+-- No HEIC: the browser converts it to JPEG before uploading (lib/photo-client.ts); marketplaces can't show HEIC anyway.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('item-photos', 'item-photos', true, 10485760, array['image/jpeg', 'image/png', 'image/webp', 'image/heic'])
+values ('item-photos', 'item-photos', true, 10485760, array['image/jpeg', 'image/png', 'image/webp'])
 on conflict (id) do nothing;
 
 -- True when the current user belongs to the household named by the first folder of an object path.

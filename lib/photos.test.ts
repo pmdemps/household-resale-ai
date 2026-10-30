@@ -1,8 +1,50 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { imageDimensions, normalizePhotoType, photoUrl, sniffImageType } from "./photo-url.ts";
+import { fitWithin, imageDimensions, isValidPhotoPath, normalizePhotoType, PHOTO_TYPES, photoStoragePath, photoUrl, sniffImageType } from "./photo-url.ts";
 
 const HOUSE = "11111111-1111-1111-1111-111111111111";
+const ITEM = "22222222-2222-4222-8222-222222222222";
+const UUID = "0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f";
+
+test("isValidPhotoPath accepts exactly <household>/<item>/<uuid>.<jpg|jpeg|png|webp>", () => {
+  for (const ext of ["jpg", "jpeg", "png", "webp"]) assert.ok(isValidPhotoPath(`${HOUSE}/${ITEM}/${UUID}.${ext}`, HOUSE, ITEM), ext);
+  assert.ok(isValidPhotoPath(photoStoragePath(HOUSE, ITEM, UUID, "jpg"), HOUSE, ITEM), "the builder and the check agree");
+});
+
+test("isValidPhotoPath rejects other households, items, shapes and types", () => {
+  const OTHER = "33333333-3333-4333-8333-333333333333";
+  const good = `${HOUSE}/${ITEM}/${UUID}.jpg`;
+  assert.equal(isValidPhotoPath(good, OTHER, ITEM), false, "another household's folder");
+  assert.equal(isValidPhotoPath(good, HOUSE, OTHER), false, "another item's folder");
+  assert.equal(isValidPhotoPath(`${OTHER}/${ITEM}/${UUID}.jpg`, HOUSE, ITEM), false, "path names a different household");
+  assert.equal(isValidPhotoPath(`${HOUSE}/${ITEM}/${UUID}.heic`, HOUSE, ITEM), false, "heic is never stored");
+  assert.equal(isValidPhotoPath(`${HOUSE}/${ITEM}/${UUID}.svg`, HOUSE, ITEM), false, "svg");
+  assert.equal(isValidPhotoPath(`${HOUSE}/${ITEM}/${UUID}.jpg.html`, HOUSE, ITEM), false, "double extension");
+  assert.equal(isValidPhotoPath(`${HOUSE}/${ITEM}/${UUID}.JPG`, HOUSE, ITEM), false, "upper-case extension");
+  assert.equal(isValidPhotoPath(`${HOUSE}/${ITEM}/${UUID.toUpperCase()}.jpg`, HOUSE, ITEM), false, "upper-case uuid");
+  assert.equal(isValidPhotoPath(`${HOUSE}/${ITEM}/photo.jpg`, HOUSE, ITEM), false, "not a uuid file name");
+  assert.equal(isValidPhotoPath(`${HOUSE}/${ITEM}/${UUID}.jpg\n`, HOUSE, ITEM), false, "trailing newline");
+  assert.equal(isValidPhotoPath(`${HOUSE}/${ITEM}/x/${UUID}.jpg`, HOUSE, ITEM), false, "extra segment");
+  assert.equal(isValidPhotoPath(`${HOUSE}/${ITEM}/../${UUID}.jpg`, HOUSE, ITEM), false, "dot segments");
+  assert.equal(isValidPhotoPath(`/${HOUSE}/${ITEM}/${UUID}.jpg`, HOUSE, ITEM), false, "leading slash");
+  assert.equal(isValidPhotoPath(`${UUID}.jpg`, HOUSE, ITEM), false, "bare file name");
+  assert.equal(isValidPhotoPath("", HOUSE, ITEM), false, "empty");
+  assert.equal(isValidPhotoPath(good, "not-a-uuid", ITEM), false, "household id must be a uuid (no regex injection)");
+  assert.equal(isValidPhotoPath(good, HOUSE, ".*"), false, "item id must be a uuid (no regex injection)");
+});
+
+test("fitWithin caps the longest side and keeps the aspect ratio", () => {
+  assert.deepEqual(fitWithin(4032, 3024, 2000), { width: 2000, height: 1500 });
+  assert.deepEqual(fitWithin(3024, 4032, 2000), { width: 1500, height: 2000 });
+  assert.deepEqual(fitWithin(1200, 800, 2000), { width: 1200, height: 800 }, "small photos are left alone");
+  assert.deepEqual(fitWithin(2000, 2000, 2000), { width: 2000, height: 2000 });
+  assert.deepEqual(fitWithin(10000, 1, 2000), { width: 2000, height: 1 }, "never collapses a side to 0");
+});
+
+test("PHOTO_TYPES only names what the path check allows", () => {
+  for (const ext of Object.values(PHOTO_TYPES)) assert.ok(isValidPhotoPath(`${HOUSE}/${ITEM}/${UUID}.${ext}`, HOUSE, ITEM), ext);
+  assert.equal("image/heic" in PHOTO_TYPES, false);
+});
 
 test("photoUrl builds the public object URL", () => {
   assert.equal(

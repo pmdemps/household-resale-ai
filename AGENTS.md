@@ -42,7 +42,7 @@ These apply to any agent that reads or acts on marketplaces, email, or the house
 
 - `app/(app)/` signed-in pages: overview, inventory, item detail, offers, settings
 - `app/actions.ts` all writes (server actions); every write also logs to `activity_log`
-- `lib/photos.ts` item photos (public `item-photos` bucket): `loadPhotos(ctx, itemId)` / `publicPhotoUrl(path)` give the public HTTPS image URLs to put on marketplace listings; uploads via `app/photo-actions.ts`
+- `lib/photos.ts` item photos (public `item-photos` bucket): `loadPhotos(ctx, itemId)` / `publicPhotoUrl(path)` give the public HTTPS image URLs to put on marketplace listings. Uploads go browser → Storage directly (`components/photo-uploader.tsx` resizes to 2000px JPEG with `lib/photo-client.ts`), then `recordItemPhoto` in `app/photo-actions.ts` validates the path and writes the row; never route photo bytes through a server action (Vercel's 4.5 MB body cap)
 - `app/api/export` CSV exports
 - `app/api/ebay/*` eBay OAuth (connect/callback), account-deletion compliance endpoint, scheduled offer sync (`CRON_SECRET`)
 - `app/marketplace-actions.ts` human-triggered eBay writes (post, reprice, end, sync, disconnect); `lib/ebay/` pure, tested client (REST + Trading XML), `lib/crypto.ts` token encryption
