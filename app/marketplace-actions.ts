@@ -215,8 +215,10 @@ export async function endEbayListing(form: FormData) {
 // ---------------------------------------------------------------------------
 export async function syncEbayOffersNow(form: FormData) {
   const ctx = await requireHousehold();
-  const backTo = text(form, "back_to", 200) || "/settings";
-  return withEbayNotice(ctx, backTo.startsWith("/") ? backTo : "/settings", { type: "household", id: ctx.household.id }, async () => {
+  // Only a same-origin path: "//host" or "/\host" would be a protocol-relative redirect off the site.
+  const requested = text(form, "back_to", 200);
+  const backTo = /^\/(?![\/\\])[^\s]*$/.test(requested) ? requested : "/settings";
+  return withEbayNotice(ctx, backTo, { type: "household", id: ctx.household.id }, async () => {
     const { conn } = await requireEbay(ctx);
     const r = await syncEbayOffers(ctx.supabase, conn, { actorUser: ctx.userId, actorAgent: null });
     revalidatePath("/offers");

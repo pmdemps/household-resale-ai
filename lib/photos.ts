@@ -78,8 +78,13 @@ export async function attachPhotos(ctx: Ctx, itemId: string, files: File[]): Pro
     real.map(async file => {
       if (file.size > MAX_PHOTO_BYTES) throw new Error(`"${file.name}" is over 10 MB. Try a smaller photo.`);
       const buffer = Buffer.from(await file.arrayBuffer());
-      const type = sniffImageType(buffer) ?? normalizePhotoType(file.type);
-      if (!type || !(type in PHOTO_TYPES)) throw new Error(`"${file.name}" isn't a JPEG, PNG, WebP or HEIC photo.`);
+      // The bytes decide, not the browser's declared type: the bucket is public, so nothing that isn't
+      // really a JPEG/PNG/WebP/HEIC may be stored (and served) as one. normalizePhotoType only improves the message.
+      const type = sniffImageType(buffer);
+      if (!type || !(type in PHOTO_TYPES)) {
+        const claimed = normalizePhotoType(file.type);
+        throw new Error(claimed ? `"${file.name}" doesn't look like a real ${PHOTO_TYPES[claimed].toUpperCase()} file.` : `"${file.name}" isn't a JPEG, PNG, WebP or HEIC photo.`);
+      }
       return { file, buffer, type, dims: imageDimensions(buffer, type) };
     }),
   );
