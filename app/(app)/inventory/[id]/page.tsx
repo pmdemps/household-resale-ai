@@ -5,6 +5,8 @@ import { addListing, recordOffer, recordSale, updateItem, updateListing } from "
 import { FeeBreakdown } from "@/components/fee-breakdown";
 import { FeeCalculator } from "@/components/fee-calculator";
 import { ItemForm } from "@/components/item-form";
+import { CompsCard } from "@/components/comps-card";
+import { ebayCompsAvailable } from "@/app/comps-actions";
 import { ItemPhotos } from "@/components/item-photos";
 import { OfferCard } from "@/components/offer-card";
 import { ProfitBadge } from "@/components/money";
@@ -16,14 +18,14 @@ import { isUsableConnection, loadEbayConnection } from "@/lib/ebay/connection";
 import { PLATFORMS, platformById, platformName } from "@/lib/platforms";
 import { loadMemberNames, loadNotes, loadPendingOffers } from "@/lib/queries";
 import { NoteComposer, NotesList } from "@/components/notes";
-import { itemStatusLabel, listingStatusLabel, money, num, offerStatusLabel, type InventoryItem, type Listing, type Offer, type Sale } from "@/lib/types";
+import { itemStatusLabel, listingStatusLabel, money, num, offerStatusLabel, type InventoryItem, type ItemComp, type Listing, type Offer, type Sale } from "@/lib/types";
 
 export default async function ItemPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string }> }) {
   const [{ id }, { saved }] = await Promise.all([params, searchParams]);
   const ctx = await requireHousehold();
   const hid = ctx.household.id;
 
-  const [itemRes, listingsRes, offersRes, saleRes, pending, comments, names, photos] = await Promise.all([
+  const [itemRes, listingsRes, offersRes, saleRes, pending, comments, names, photos, compsRes, ebayCompsOn] = await Promise.all([
     ctx.supabase.from("inventory_items").select("*").eq("household_id", hid).eq("id", id).maybeSingle(),
     ctx.supabase.from("listings").select("*").eq("household_id", hid).eq("item_id", id).order("created_at"),
     ctx.supabase.from("offers").select("*, listings!inner(item_id, platform)").eq("household_id", hid).eq("listings.item_id", id).neq("status", "pending").order("received_at", { ascending: false }),
@@ -32,6 +34,9 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
     loadNotes(ctx, { itemId: id }),
     loadMemberNames(ctx),
     loadPhotos(ctx, id),
+    // Errors (e.g. the item_comps migration not applied yet) hide the card instead of breaking the page.
+    ctx.supabase.from("item_comps").select("*").eq("household_id", hid).eq("item_id", id).order("price").limit(100),
+    ebayCompsAvailable(),
   ]);
   const ebayConn = await loadEbayConnection(ctx.supabase, hid).catch(() => null);
   if (!itemRes.data) notFound();
@@ -94,6 +99,10 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
 
       <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
         <div className="space-y-6">
+          {!isSold && !compsRes.error && (
+            <CompsCard itemId={item.id} comps={(compsRes.data ?? []) as ItemComp[]} askingPrice={num(item.target_price)} ebayAvailable={ebayCompsOn} />
+          )}
+
           <PostToEbay item={item} listings={listings} hasEbayConnection={isUsableConnection(ebayConn)} photoCount={photos.length} />
 
           <section className="surface p-5">
