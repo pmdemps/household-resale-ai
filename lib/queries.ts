@@ -43,7 +43,7 @@ export async function loadPendingOffers(ctx: Ctx, itemId?: string): Promise<Offe
 export async function loadOverview(ctx: Ctx) {
   const hid = ctx.household.id;
   const [items, listings, sales, tasks, activity] = await Promise.all([
-    ctx.supabase.from("inventory_items").select("id, status, purchase_cost, target_price").eq("household_id", hid),
+    ctx.supabase.from("inventory_items").select("id, name, status, purchase_cost, target_price").eq("household_id", hid),
     ctx.supabase.from("listings").select("id, status, list_price, platform").eq("household_id", hid),
     ctx.supabase.from("sales").select("*").eq("household_id", hid).order("sold_at", { ascending: false }),
     ctx.supabase.from("agent_tasks").select("*").eq("household_id", hid).eq("status", "pending").neq("kind", "offer_decision").order("created_at", { ascending: false }),
@@ -51,7 +51,7 @@ export async function loadOverview(ctx: Ctx) {
   ]);
   for (const r of [items, listings, sales, tasks, activity]) if (r.error) throw new Error(r.error.message);
 
-  const itemRows = (items.data ?? []) as Pick<InventoryItem, "id" | "status" | "purchase_cost" | "target_price">[];
+  const itemRows = (items.data ?? []) as Pick<InventoryItem, "id" | "name" | "status" | "purchase_cost" | "target_price">[];
   const listingRows = (listings.data ?? []) as Pick<Listing, "id" | "status" | "list_price" | "platform">[];
   const saleRows = (sales.data ?? []) as Sale[];
   const costById = new Map(itemRows.map(i => [i.id, num(i.purchase_cost)]));
@@ -80,7 +80,20 @@ export async function loadOverview(ctx: Ctx) {
     byPlatform.set(s.platform, e);
   }
 
+  const nameById = new Map(itemRows.map(i => [i.id, i.name]));
+  const salePayout = (x: Sale) => num(x.sale_price) + num(x.shipping_charged) - num(x.platform_fees) - num(x.shipping_cost) - num(x.other_costs);
+  const recentSales = saleRows.slice(0, 6).map(x => ({
+    id: x.id,
+    itemId: x.item_id,
+    name: nameById.get(x.item_id) ?? "Item",
+    platform: x.platform,
+    soldAt: x.sold_at,
+    payout: salePayout(x),
+    profit: salePayout(x) - (costById.get(x.item_id) ?? 0),
+  }));
+
   return {
+    recentSales,
     counts: {
       unsold: unsold.length,
       needsListing: unsold.filter(i => i.status === "draft" || i.status === "researching").length,

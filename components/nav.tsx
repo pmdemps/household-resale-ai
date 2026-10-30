@@ -58,7 +58,7 @@ export function BottomNav({ pendingCount }: { pendingCount: number }) {
               )}
               {href !== "/inventory/new" && label}
               {href === "/offers" && pendingCount > 0 && (
-                <span className="absolute right-[22%] top-1.5 h-2 w-2 rounded-full bg-amber-400" aria-label={`${pendingCount} pending`} />
+                <span className="absolute right-[22%] top-1.5 h-2 w-2 rounded-full bg-warn" aria-label={`${pendingCount} pending`} />
               )}
             </Link>
           );

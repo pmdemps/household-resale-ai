@@ -11,7 +11,7 @@ export function FeeBreakdown({ estimate, itemCost, compact = false }: { estimate
         {estimate.lines.map(l => <Row key={l.label} label={l.label} value={"− " + money(l.amount)} muted />)}
         {estimate.sellerShippingCost > 0 && <Row label="Shipping label you pay" value={"− " + money(estimate.sellerShippingCost)} muted />}
         <div className="my-2 border-t border-line" />
-        <Row label="You receive" value={money(estimate.payout)} strong />
+        <Row label="You receive" value={money(estimate.payout)} strong tone={estimate.payout < 0 ? "bad" : itemCost ? undefined : estimate.payout > 0 ? "good" : undefined} />
         {itemCost !== undefined && itemCost > 0 && (
           <>
             <Row label="Item cost" value={"− " + money(itemCost)} muted />
@@ -28,7 +28,7 @@ export function FeeBreakdown({ estimate, itemCost, compact = false }: { estimate
 }
 
 function Row({ label, value, muted, strong, tone }: { label: string; value: string; muted?: boolean; strong?: boolean; tone?: "good" | "bad" }) {
-  const color = tone === "good" ? "text-emerald-300" : tone === "bad" ? "text-rose-300" : strong ? "text-white" : muted ? "text-slate-400" : "text-slate-200";
+  const color = tone === "good" ? "text-good" : tone === "bad" ? "text-bad" : strong ? "text-white" : muted ? "text-slate-400" : "text-slate-200";
   return (
     <div className="flex items-baseline justify-between gap-4">
       <dt className={muted ? "text-slate-400" : "text-slate-300"}>{label}</dt>

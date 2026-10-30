@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Boxes, CircleDollarSign, Download, HandCoins, MessageSquareText, Plus, Tags, TrendingUp } from "lucide-react";
+import { ArrowRight, Boxes, CircleDollarSign, Download, HandCoins, MessageSquareText, Plus, Tags, TrendingDown, TrendingUp } from "lucide-react";
 import { resolveTask } from "@/app/actions";
 import { OfferCard } from "@/components/offer-card";
 import { requireHousehold } from "@/lib/household";
@@ -7,6 +7,7 @@ import { platformName } from "@/lib/platforms";
 import { loadMemberNames, loadNotes, loadOverview, loadPendingOffers } from "@/lib/queries";
 import { NoteComposer, NotesList } from "@/components/notes";
 import { money } from "@/lib/types";
+import { MoneyText, ProfitBadge, toneOf, verdict } from "@/components/money";
 
 export default async function OverviewPage() {
   const ctx = await requireHousehold();
@@ -37,11 +38,12 @@ export default async function OverviewPage() {
         </section>
       )}
 
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat icon={Boxes} label="To sell" value={String(overview.counts.unsold)} sub={`${overview.counts.needsListing} not listed yet`} href="/inventory?status=open" />
-        <Stat icon={Tags} label="Live listings" value={String(overview.counts.activeListings)} sub={`${money(overview.activeValue)} listed`} href="/inventory?status=listed" />
-        <Stat icon={CircleDollarSign} label="Paid out" value={money(overview.payout)} sub={`${overview.counts.sold} sold · ${money(overview.revenue)} gross`} />
-        <Stat icon={TrendingUp} label="Profit" value={money(overview.profit)} sub="after fees, shipping, cost" tone={overview.profit >= 0 ? "good" : "bad"} />
+      <MoneyHero profit={overview.profit} sold={overview.counts.sold} payout={overview.payout} />
+
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+        <Stat icon={Boxes} tile="tile-violet" label="To sell" value={String(overview.counts.unsold)} sub={`${overview.counts.needsListing} not listed yet`} href="/inventory?status=open" />
+        <Stat icon={Tags} tile="tile-pink" label="Live listings" value={String(overview.counts.activeListings)} sub={`${money(overview.activeValue)} listed`} href="/inventory?status=listed" />
+        <Stat icon={CircleDollarSign} tile="tile-sky" label="Paid out" value={money(overview.payout)} sub={`${overview.counts.sold} sold · ${money(overview.revenue)} gross`} className="col-span-2 lg:col-span-1" />
       </section>
 
       {offers.length > 0 && (
@@ -53,6 +55,26 @@ export default async function OverviewPage() {
           <div className="space-y-3">{offers.slice(0, 2).map(o => <OfferCard key={o.id} offer={o} />)}</div>
         </section>
       )}
+
+      {overview.recentSales.length > 0 && (
+        <section className="surface p-5">
+          <h2 className="text-base font-semibold text-white">Recent sales</h2>
+          <ul className="mt-3 divide-y divide-line">
+            {overview.recentSales.map(r => (
+              <li key={r.id}>
+                <Link href={`/inventory/${r.itemId}`} className="flex items-center justify-between gap-3 py-2.5">
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm text-white">{r.name}</span>
+                    <span className="text-xs text-slate-500">{platformName(r.platform)} · {new Date(r.soldAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                  </span>
+                  <ProfitBadge value={r.profit} />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
 
       {overview.tasks.length > 0 && (
         <section className="surface p-5">
@@ -100,7 +122,7 @@ export default async function OverviewPage() {
               <thead><tr className="text-left text-xs text-slate-500"><th className="pb-2 font-normal">Platform</th><th className="pb-2 text-right font-normal">Live</th><th className="pb-2 text-right font-normal">Sold</th><th className="pb-2 text-right font-normal">Paid out</th></tr></thead>
               <tbody className="divide-y divide-line">
                 {overview.byPlatform.map(p => (
-                  <tr key={p.platform}><td className="py-2 text-slate-200">{platformName(p.platform)}</td><td className="py-2 text-right tabular-nums">{p.active}</td><td className="py-2 text-right tabular-nums">{p.sold}</td><td className="py-2 text-right tabular-nums">{money(p.payout)}</td></tr>
+                  <tr key={p.platform}><td className="py-2 text-slate-200">{platformName(p.platform)}</td><td className="py-2 text-right tabular-nums">{p.active}</td><td className="py-2 text-right tabular-nums">{p.sold}</td><td className="py-2 text-right"><MoneyText value={p.payout} /></td></tr>
                 ))}
               </tbody>
             </table>
@@ -142,13 +164,37 @@ function describe(action: string, d: Record<string, unknown>) {
   }
 }
 
-function Stat({ icon: Icon, label, value, sub, href, tone }: { icon: typeof Boxes; label: string; value: string; sub: string; href?: string; tone?: "good" | "bad" }) {
+function MoneyHero({ profit, sold, payout }: { profit: number; sold: number; payout: number }) {
+  const tone = toneOf(profit);
+  const Icon = tone === "bad" ? TrendingDown : TrendingUp;
+  return (
+    <section className={"tile p-5 sm:p-6 " + (tone === "good" ? "tile-good" : tone === "bad" ? "tile-bad" : "")}>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <p className={"flex items-center gap-2 text-sm font-medium " + (tone === "good" ? "text-good" : tone === "bad" ? "text-bad" : "text-slate-400")}>
+            <Icon size={18} aria-hidden /> {sold === 0 ? "No sales yet" : verdict(profit)}
+          </p>
+          <p className={"mt-1 text-4xl font-bold tracking-tight tabular-nums sm:text-5xl " + (tone === "good" ? "text-good" : tone === "bad" ? "text-bad" : "text-white")}>
+            {tone === "bad" ? "−" : ""}{money(Math.abs(profit))}
+          </p>
+          <p className="mt-1 text-xs text-slate-500">Profit from {sold} sale{sold === 1 ? "" : "s"} after fees, shipping and what you paid · {money(payout)} paid out</p>
+        </div>
+        <div className="flex gap-2 text-[11px] text-slate-500">
+          <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-good" /> made money</span>
+          <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-bad" /> lost money</span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Stat({ icon: Icon, label, value, sub, href, tile, className = "" }: { icon: typeof Boxes; label: string; value: string; sub: string; href?: string; tile: string; className?: string }) {
   const body = (
-    <div className="surface h-full p-4">
+    <div className={`tile ${tile} h-full p-4`}>
       <div className="flex items-center justify-between text-slate-400"><span className="text-xs">{label}</span><Icon size={16} /></div>
-      <p className={"mt-2 text-xl font-semibold tabular-nums sm:text-2xl " + (tone === "bad" ? "text-rose-300" : tone === "good" ? "text-emerald-300" : "text-white")}>{value}</p>
+      <p className="mt-2 text-xl font-semibold tabular-nums text-white sm:text-2xl">{value}</p>
       <p className="mt-1 flex items-center gap-1 text-[11px] text-slate-500">{sub}{href && <ArrowRight size={11} />}</p>
     </div>
   );
-  return href ? <Link href={href}>{body}</Link> : body;
+  return href ? <Link href={href} className={className}>{body}</Link> : <div className={className}>{body}</div>;
 }

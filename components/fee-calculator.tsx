@@ -47,7 +47,7 @@ export function FeeCalculator({ defaultPrice, itemCost, category }: { defaultPri
                   {(pl.id === "vinted" || pl.id === "poshmark") && <span className="block text-[11px] text-slate-500">Buyer pays label</span>}
                 </td>
                 <td className="py-2 text-right tabular-nums text-slate-400">{money(e.totalFees)}</td>
-                <td className="py-2 text-right font-medium tabular-nums text-white">{money(e.payout)}</td>
+                <td className={"py-2 text-right font-medium tabular-nums " + (e.profit < 0 ? "text-bad" : "text-good")}>{money(e.payout)}</td>
               </tr>
             );
           })}

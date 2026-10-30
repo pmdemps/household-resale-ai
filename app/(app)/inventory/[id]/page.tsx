@@ -6,6 +6,7 @@ import { FeeBreakdown } from "@/components/fee-breakdown";
 import { FeeCalculator } from "@/components/fee-calculator";
 import { ItemForm } from "@/components/item-form";
 import { OfferCard } from "@/components/offer-card";
+import { ProfitBadge } from "@/components/money";
 import { estimateFees } from "@/lib/fees";
 import { requireHousehold } from "@/lib/household";
 import { PLATFORMS, platformById, platformName } from "@/lib/platforms";
@@ -67,7 +68,10 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
             <Metric label="Sale price" value={money(num(sale.sale_price))} />
             <Metric label="Fees" value={money(num(sale.platform_fees))} />
             <Metric label="Shipping you paid" value={money(num(sale.shipping_cost))} />
-            <Metric label="Profit" value={money(num(sale.sale_price) + num(sale.shipping_charged) - num(sale.platform_fees) - num(sale.shipping_cost) - num(sale.other_costs) - cost)} />
+            <div>
+              <dt className="text-xs text-slate-500">Profit</dt>
+              <dd className="mt-1"><ProfitBadge size="md" value={num(sale.sale_price) + num(sale.shipping_charged) - num(sale.platform_fees) - num(sale.shipping_cost) - num(sale.other_costs) - cost} /></dd>
+            </div>
           </dl>
         </section>
       )}

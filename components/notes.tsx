@@ -6,7 +6,7 @@ import { timeAgo, type Note } from "@/lib/types";
 
 type NoteRow = Note & { inventory_items?: { id: string; name: string } | null };
 
-const AVATAR_COLORS = ["bg-accent/20 text-accent", "bg-pink-400/20 text-pink-300", "bg-emerald-400/20 text-emerald-300", "bg-amber-300/20 text-amber-200"];
+const AVATAR_COLORS = ["bg-accent/20 text-accent", "bg-pop/20 text-pop", "bg-good/20 text-good", "bg-warn/20 text-warn"];
 
 function avatarColor(userId: string, names: MemberNames) {
   const idx = Object.keys(names).indexOf(userId);
@@ -53,7 +53,7 @@ export function NotesList({
         const name = names[n.author] ?? "Former member";
         const mine = n.author === currentUser;
         return (
-          <li key={n.id} className={"rounded-xl border p-3.5 " + (n.pinned ? "border-amber-300/25 bg-amber-300/[0.04]" : "border-line bg-ink/40")}>
+          <li key={n.id} className={"rounded-xl border p-3.5 " + (n.pinned ? "border-warn/25 bg-warn/[0.04]" : "border-line bg-ink/40")}>
             <div className="flex items-start gap-3">
               <span className={"flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold " + avatarColor(n.author, names)} aria-hidden>
                 {name.slice(0, 1).toUpperCase()}
@@ -62,7 +62,7 @@ export function NotesList({
                 <p className="flex flex-wrap items-baseline gap-x-2 text-xs">
                   <span className="font-medium text-slate-200">{mine ? `${name} (you)` : name}</span>
                   <time dateTime={n.created_at} className="text-slate-500">{timeAgo(n.created_at)}</time>
-                  {n.pinned && <span className="inline-flex items-center gap-1 text-amber-200"><Pin size={11} /> pinned</span>}
+                  {n.pinned && <span className="inline-flex items-center gap-1 text-warn"><Pin size={11} /> pinned</span>}
                 </p>
                 <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-slate-200">{n.body}</p>
                 {showItem && n.inventory_items && (
@@ -85,7 +85,7 @@ export function NotesList({
                   <form action={deleteNote}>
                     <input type="hidden" name="id" value={n.id} />
                     {n.item_id && <input type="hidden" name="item_id" value={n.item_id} />}
-                    <button className="rounded-lg p-1.5 text-slate-500 hover:bg-white/[0.06] hover:text-rose-300" aria-label="Delete note" title="Delete">
+                    <button className="rounded-lg p-1.5 text-slate-500 hover:bg-white/[0.06] hover:text-bad" aria-label="Delete note" title="Delete">
                       <Trash2 size={15} />
                     </button>
                   </form>
