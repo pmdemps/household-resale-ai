@@ -179,9 +179,12 @@ function MoneyHero({ profit, sold, payout }: { profit: number; sold: number; pay
           </p>
           <p className="mt-1 text-xs text-slate-500">Profit from {sold} sale{sold === 1 ? "" : "s"} after fees, shipping and what you paid · {money(payout)} paid out</p>
         </div>
-        <div className="flex gap-2 text-[11px] text-slate-500">
-          <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-good" /> made money</span>
-          <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-bad" /> lost money</span>
+        <div className="flex flex-col items-start gap-2 sm:items-end">
+          <div className="flex gap-2 text-[11px] text-slate-500">
+            <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-good" /> made money</span>
+            <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-bad" /> lost money</span>
+          </div>
+          <Link href="/insights" className="inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline">What sells best <ArrowRight size={14} /></Link>
         </div>
       </div>
     </section>
