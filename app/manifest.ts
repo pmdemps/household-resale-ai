@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Household resale tracker: inventory, offers, profit and notes.",
     start_url: "/",
     display: "standalone",
-    background_color: "#0b1020",
-    theme_color: "#0b1020",
+    background_color: "#141416",
+    theme_color: "#f2b705",
     icons: [
       { src: "/icon.svg", type: "image/svg+xml", sizes: "any" },
       { src: "/apple-icon", type: "image/png", sizes: "180x180" },

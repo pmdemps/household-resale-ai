@@ -27,13 +27,14 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
   return (
     <div className="mx-auto max-w-3xl space-y-5">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Insights</h1>
+        <Link href="/money" className="text-sm text-link hover:underline">← Money</Link>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">What sells best</h1>
         <p className="mt-1 text-sm text-slate-400">What sells, how fast, and what actually makes money after fees, shipping and what you paid.</p>
       </header>
 
       <section className="grid grid-cols-3 gap-3">
-        <Mini label="Sold" value={String(t.sold)} tile="tile-violet" />
-        <Mini label="Typical time to sell" value={t.medianDaysToSell === null ? "—" : `${t.medianDaysToSell} day${t.medianDaysToSell === 1 ? "" : "s"}`} tile="tile-sky" />
+        <Mini label="Sold" value={String(t.sold)} tile="tile-sun" />
+        <Mini label="Typical time to sell" value={t.medianDaysToSell === null ? "—" : `${t.medianDaysToSell} day${t.medianDaysToSell === 1 ? "" : "s"}`} tile="tile-peach" />
         <Mini label="Sold at a loss" value={String(t.losers)} tile={t.losers > 0 ? "tile-bad" : "tile-good"} />
       </section>
 
@@ -54,7 +55,7 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
       <nav className="flex gap-1" aria-label="Group by">
         {TABS.map(tab => (
           <Link key={tab.id} href={{ pathname: "/insights", query: tab.id === "brand" ? {} : { by: tab.id } }}
-            className={"rounded-full px-3 py-1.5 text-sm " + (by === tab.id || (tab.id === "brand" && !["category", "platform"].includes(by)) ? "bg-white/10 text-white" : "text-slate-400 hover:text-white")}>
+            className={"rounded-full px-3 py-1.5 text-sm " + (by === tab.id || (tab.id === "brand" && !["category", "platform"].includes(by)) ? "bg-accent/20 font-medium text-white" : "text-slate-400 hover:text-white")}>
             {tab.label}
           </Link>
         ))}

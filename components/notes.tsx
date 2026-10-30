@@ -6,7 +6,7 @@ import { timeAgo, type Note } from "@/lib/types";
 
 type NoteRow = Note & { inventory_items?: { id: string; name: string } | null };
 
-const AVATAR_COLORS = ["bg-accent/20 text-accent", "bg-pop/20 text-pop", "bg-good/20 text-good", "bg-warn/20 text-warn"];
+const AVATAR_COLORS = ["bg-accent/20 text-link", "bg-pop/20 text-pop", "bg-good/20 text-good", "bg-warn/20 text-warn"];
 
 function avatarColor(userId: string, names: MemberNames) {
   const idx = Object.keys(names).indexOf(userId);
@@ -66,7 +66,7 @@ export function NotesList({
                 </p>
                 <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-slate-200">{n.body}</p>
                 {showItem && n.inventory_items && (
-                  <Link href={`/inventory/${n.inventory_items.id}`} className="mt-1.5 inline-block rounded-md bg-white/[0.05] px-2 py-0.5 text-xs text-accent hover:underline">
+                  <Link href={`/inventory/${n.inventory_items.id}`} className="mt-1.5 inline-block rounded-md bg-white/[0.05] px-2 py-0.5 text-xs text-link hover:underline">
                     on {n.inventory_items.name}
                   </Link>
                 )}

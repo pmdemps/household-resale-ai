@@ -15,6 +15,10 @@ const config: Config = {
         panel: v("panel"),
         line: v("line"),
         accent: v("accent"),
+        // Text that sits on the gold accent: dark in both themes.
+        "on-accent": v("on-accent"),
+        // The accent as text or icon color: deep honey in light mode, gold in dark.
+        link: v("link"),
         good: v("good"),
         bad: v("bad"),
         warn: v("warn"),

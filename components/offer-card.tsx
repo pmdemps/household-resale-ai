@@ -36,7 +36,7 @@ export function OfferCard({ offer }: { offer: OfferWithContext }) {
             {offer.item.name}
           </Link>
           <p className="mt-1 text-sm text-slate-400">
-            Listed at {money(listPrice)} · offer {money(amount)}
+            Asking {money(listPrice)}, offered {money(amount)}
             {pctOff > 0 && <span className="text-slate-500"> ({pctOff}% off)</span>}
             {offer.buyer_handle && <span className="text-slate-500"> · from {offer.buyer_handle}</span>}
           </p>
@@ -59,12 +59,12 @@ export function OfferCard({ offer }: { offer: OfferWithContext }) {
           <FeeBreakdown estimate={atOffer} itemCost={cost} compact />
         </div>
         <div className="hidden sm:block">
-          <p className="mb-1.5 text-xs text-slate-400">At your list price {money(listPrice)}</p>
+          <p className="mb-1.5 text-xs text-slate-400">At your asking price {money(listPrice)}</p>
           <FeeBreakdown estimate={atList} itemCost={cost} compact />
         </div>
       </div>
       <p className="mt-2 text-xs text-slate-500 sm:hidden">
-        At your list price you&apos;d receive {money(atList.payout)} ({money(atList.payout - atOffer.payout)} more).
+        At your asking price you&apos;d get {money(atList.payout)} after fees ({money(atList.payout - atOffer.payout)} more).
       </p>
 
       <div className="mt-4 flex flex-wrap gap-2">
@@ -96,7 +96,7 @@ export function OfferCard({ offer }: { offer: OfferWithContext }) {
       </div>
       <p className="mt-2 text-[11px] text-slate-500">
         This records your decision here. Until the {platformName(offer.listing.platform)} integration is live, also tap the same button in the
-        {" "}{platformName(offer.listing.platform)} app{offer.listing.listing_url ? <> (<a className="text-accent hover:underline" href={offer.listing.listing_url} target="_blank" rel="noreferrer">open listing</a>)</> : ""}.
+        {" "}{platformName(offer.listing.platform)} app{offer.listing.listing_url ? <> (<a className="text-link hover:underline" href={offer.listing.listing_url} target="_blank" rel="noreferrer">open listing</a>)</> : ""}.
       </p>
     </article>
   );

@@ -1,4 +1,4 @@
-import { CATEGORIES, CONDITIONS, ITEM_STATUSES, type InventoryItem } from "@/lib/types";
+import { CATEGORIES, CONDITIONS, ITEM_STATUSES, itemStatusLabel, type InventoryItem } from "@/lib/types";
 
 type Props = {
   action: (form: FormData) => Promise<void>;
@@ -57,7 +57,7 @@ export function ItemForm({ action, item }: Props) {
       {editing && (
         <Field label="Status" htmlFor="status">
           <select id="status" name="status" className="field" defaultValue={item!.status}>
-            {ITEM_STATUSES.map(s => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
+            {ITEM_STATUSES.map(s => <option key={s} value={s}>{itemStatusLabel(s)}{s === "researching" ? " (still deciding)" : ""}</option>)}
           </select>
         </Field>
       )}

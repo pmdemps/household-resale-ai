@@ -81,7 +81,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <li key={p.id} className="py-3">
               <p className="text-sm text-white">
                 {p.name}
-                {p.hasAccount && <span className="ml-2 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] text-accent">account set up</span>}
+                {p.hasAccount && <span className="ml-2 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] text-link">account set up</span>}
                 <span className="ml-2 text-[11px] text-slate-500">{p.integration === "official_api" ? "API available" : p.integration === "email_only" ? "email tracking" : "manual"}</span>
               </p>
               <p className="mt-1 text-xs leading-5 text-slate-400">{p.integrationNote}</p>

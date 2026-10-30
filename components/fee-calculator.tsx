@@ -42,7 +42,7 @@ export function FeeCalculator({ defaultPrice, itemCost, category }: { defaultPri
               <tr key={pl.id} className={warn ? "opacity-50" : ""}>
                 <td className="py-2">
                   <span className="text-slate-200">{pl.name}</span>
-                  {pl.hasAccount && <span className="ml-1.5 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] text-accent">your account</span>}
+                  {pl.hasAccount && <span className="ml-1.5 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] text-link">your account</span>}
                   {warn && <span className="block text-[11px] text-slate-500">Vintage/handmade only</span>}
                   {(pl.id === "vinted" || pl.id === "poshmark") && <span className="block text-[11px] text-slate-500">Buyer pays label</span>}
                 </td>
