@@ -44,7 +44,7 @@ export async function loadPendingOffers(ctx: Ctx, itemId?: string): Promise<Offe
 export async function loadOverview(ctx: Ctx) {
   const hid = ctx.household.id;
   const [items, listings, sales, tasks, activity] = await Promise.all([
-    ctx.supabase.from("inventory_items").select("id, name, status, purchase_cost, target_price").eq("household_id", hid),
+    ctx.supabase.from("inventory_items").select("id, name, status, purchase_cost, target_price, created_at").eq("household_id", hid),
     ctx.supabase.from("listings").select("id, status, list_price, platform").eq("household_id", hid),
     ctx.supabase.from("sales").select("*").eq("household_id", hid).order("sold_at", { ascending: false }),
     ctx.supabase.from("agent_tasks").select("*").eq("household_id", hid).eq("status", "pending").neq("kind", "offer_decision").order("created_at", { ascending: false }),
@@ -52,7 +52,7 @@ export async function loadOverview(ctx: Ctx) {
   ]);
   for (const r of [items, listings, sales, tasks, activity]) if (r.error) throw new Error(r.error.message);
 
-  const itemRows = (items.data ?? []) as Pick<InventoryItem, "id" | "name" | "status" | "purchase_cost" | "target_price">[];
+  const itemRows = (items.data ?? []) as Pick<InventoryItem, "id" | "name" | "status" | "purchase_cost" | "target_price" | "created_at">[];
   const listingRows = (listings.data ?? []) as Pick<Listing, "id" | "status" | "list_price" | "platform">[];
   const saleRows = (sales.data ?? []) as Sale[];
   const costById = new Map(itemRows.map(i => [i.id, num(i.purchase_cost)]));
@@ -93,11 +93,18 @@ export async function loadOverview(ctx: Ctx) {
     profit: salePayout(x) - (costById.get(x.item_id) ?? 0),
   }));
 
+  // Newest unlisted items, so something just added is visible on the overview, not only counted.
+  const needsListing = unsold
+    .filter(i => i.status === "draft" || i.status === "researching")
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .map(i => ({ id: i.id, name: i.name, targetPrice: num(i.target_price), createdAt: i.created_at }));
+
   return {
     recentSales,
+    needsListing: needsListing.slice(0, 5),
     counts: {
       unsold: unsold.length,
-      needsListing: unsold.filter(i => i.status === "draft" || i.status === "researching").length,
+      needsListing: needsListing.length,
       activeListings: active.length,
       sold: saleRows.length,
     },

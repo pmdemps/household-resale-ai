@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { ArrowRight, Boxes, CircleDollarSign, Download, HandCoins, MessageSquareText, Plus, Tags, TrendingDown, TrendingUp } from "lucide-react";
+import { ArrowRight, Boxes, CircleDollarSign, Download, HandCoins, MessageSquareText, PackagePlus, Plus, Tags, TrendingDown, TrendingUp } from "lucide-react";
 import { resolveTask } from "@/app/actions";
 import { OfferCard } from "@/components/offer-card";
 import { requireHousehold } from "@/lib/household";
 import { platformName } from "@/lib/platforms";
 import { loadMemberNames, loadNotes, loadOverview, loadPendingOffers } from "@/lib/queries";
 import { NoteComposer, NotesList } from "@/components/notes";
-import { money } from "@/lib/types";
+import { money, timeAgo } from "@/lib/types";
 import { MoneyText, ProfitBadge, toneOf, verdict } from "@/components/money";
 
 export default async function OverviewPage() {
@@ -53,6 +53,30 @@ export default async function OverviewPage() {
             {offers.length > 2 && <Link href="/offers" className="text-sm text-accent hover:underline">All {offers.length}</Link>}
           </div>
           <div className="space-y-3">{offers.slice(0, 2).map(o => <OfferCard key={o.id} offer={o} />)}</div>
+        </section>
+      )}
+
+      {overview.needsListing.length > 0 && (
+        <section className="surface p-5">
+          <div className="flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-base font-semibold text-white"><PackagePlus size={17} className="text-accent" /> Not listed yet</h2>
+            {overview.counts.needsListing > overview.needsListing.length && (
+              <Link href="/inventory?status=unlisted" className="text-sm text-accent hover:underline">All {overview.counts.needsListing}</Link>
+            )}
+          </div>
+          <ul className="mt-3 divide-y divide-line">
+            {overview.needsListing.map(i => (
+              <li key={i.id}>
+                <Link href={`/inventory/${i.id}`} className="flex items-center justify-between gap-3 py-2.5">
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm text-white">{i.name}</span>
+                    <span className="text-xs text-slate-500">added {timeAgo(i.createdAt)}{i.targetPrice > 0 ? ` · asking ${money(i.targetPrice)}` : ""}</span>
+                  </span>
+                  <span className="inline-flex shrink-0 items-center gap-1 text-xs text-accent">Add listing <ArrowRight size={12} /></span>
+                </Link>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 
@@ -157,6 +181,7 @@ function describe(action: string, d: Record<string, unknown>) {
     case "offer_declined": return `Declined ${money(Number(d.amount))}`;
     case "offer_countered": return `Countered at ${money(Number(d.counter))}`;
     case "note_added": return "Posted a note";
+    case "listing_drafted": return "Drafted listings" + (Array.isArray(d.platforms) ? ` for ${(d.platforms as string[]).map(platformName).join(" and ")}` : "");
     case "comment_added": return "Commented on an item";
     case "member_added": return "Added a household member";
     case "sale_recorded": return `Sold on ${platformName(String(d.platform))} for ${money(Number(d.salePrice))}`;
