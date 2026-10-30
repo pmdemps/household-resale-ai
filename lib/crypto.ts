@@ -4,15 +4,19 @@
 //
 // Key: TOKEN_ENCRYPTION_KEY, base64 of 32 random bytes. Generate one with:
 //   node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+// It is used directly for AES-GCM; the HMAC key for OAuth state is derived from it with HKDF
+// (stateSigningKey), so the two uses never share key material.
 //
 // Ciphertext format: "v1:<iv b64>:<ciphertext b64>:<auth tag b64>". The "v1" prefix is the key
 // version; rotate by introducing v2 and re-encrypting lazily on read.
 
-import { createCipheriv, createDecipheriv, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHmac, hkdfSync, randomBytes, timingSafeEqual } from "node:crypto";
 
 export const ENCRYPTION_KEY_ENV = "TOKEN_ENCRYPTION_KEY";
 const VERSION = "v1";
 const IV_BYTES = 12;
+/** HKDF info label for the OAuth-state signing key. Changing it invalidates in-flight states (15 min lifetime). */
+const STATE_KEY_INFO = "oauth-state";
 
 export class CryptoConfigError extends Error {
   constructor(message: string) {
@@ -74,9 +78,18 @@ export function decrypt(payload: string, key: string | undefined = process.env[E
   return Buffer.concat([decipher.update(Buffer.from(ctB64, "base64")), decipher.final()]).toString("utf8");
 }
 
-/** Base64url HMAC-SHA256 of `data` keyed by the token encryption key (used for OAuth state). */
+/**
+ * Key for signing OAuth `state` values: derived from TOKEN_ENCRYPTION_KEY with HKDF-SHA256 (no salt,
+ * info "oauth-state"), so the raw AES key is used for encryption only and the signing key is
+ * independent of it. One secret to manage, two keys in use.
+ */
+export function stateSigningKey(key: string | undefined = process.env[ENCRYPTION_KEY_ENV]): Buffer {
+  return Buffer.from(hkdfSync("sha256", loadKey(key), "", STATE_KEY_INFO, 32));
+}
+
+/** Base64url HMAC-SHA256 of `data` keyed by the derived state-signing key (used for OAuth state). */
 export function hmacSign(data: string, key: string | undefined = process.env[ENCRYPTION_KEY_ENV]): string {
-  return createHmac("sha256", loadKey(key)).update(data).digest("base64url");
+  return createHmac("sha256", stateSigningKey(key)).update(data).digest("base64url");
 }
 
 export function hmacVerify(data: string, signature: string, key: string | undefined = process.env[ENCRYPTION_KEY_ENV]): boolean {

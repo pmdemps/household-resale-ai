@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { CryptoConfigError, decrypt, encrypt, generateKey, hmacSign, hmacVerify, isEncryptionConfigured, loadKey } from "./crypto.ts";
+import { createHmac, hkdfSync } from "node:crypto";
+import { CryptoConfigError, decrypt, encrypt, generateKey, hmacSign, hmacVerify, isEncryptionConfigured, loadKey, stateSigningKey } from "./crypto.ts";
 
 const KEY = Buffer.alloc(32, 7).toString("base64");
 const OTHER = Buffer.alloc(32, 9).toString("base64");
@@ -51,4 +52,18 @@ test("hmac sign/verify is deterministic, keyed and tamper-evident", () => {
   assert.equal(hmacVerify("household:abd", sig, KEY), false);
   assert.equal(hmacVerify("household:abc", sig, OTHER), false);
   assert.equal(hmacVerify("household:abc", sig + "x", KEY), false);
+});
+
+test("oauth state is signed with an HKDF-derived key, never the raw encryption key", () => {
+  const raw = Buffer.from(KEY, "base64");
+  const derived = stateSigningKey(KEY);
+  assert.equal(derived.length, 32);
+  assert.deepEqual(derived, stateSigningKey(KEY), "deterministic");
+  assert.notDeepEqual(derived, raw, "differs from the AES key");
+  assert.notDeepEqual(derived, stateSigningKey(OTHER), "depends on the secret");
+  // Pinned derivation: HKDF-SHA256, empty salt, info "oauth-state", 32 bytes.
+  assert.deepEqual(derived, Buffer.from(hkdfSync("sha256", raw, "", "oauth-state", 32)));
+  assert.equal(hmacSign("x", KEY), createHmac("sha256", derived).update("x").digest("base64url"));
+  assert.notEqual(hmacSign("x", KEY), createHmac("sha256", raw).update("x").digest("base64url"));
+  assert.throws(() => stateSigningKey(undefined), CryptoConfigError);
 });
