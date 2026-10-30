@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { Download, MapPin, Plus, Search } from "lucide-react";
 import { requireHousehold } from "@/lib/household";
+import { loadCoverPhotos } from "@/lib/photos";
 import { platformName } from "@/lib/platforms";
 import { itemStatusLabel, money, num, type InventoryItem } from "@/lib/types";
+import { ItemThumb } from "@/components/item-photos";
 import { ProfitBadge } from "@/components/money";
 
 const FILTERS = [
@@ -45,6 +47,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
   if (error) throw new Error(error.message);
   type SaleLite = { sale_price: number; shipping_charged: number; platform_fees: number; shipping_cost: number; other_costs: number };
   const items = (data ?? []) as (InventoryItem & { listings: { platform: string; status: string; list_price: number }[]; sales: SaleLite[] | SaleLite | null })[];
+  const covers = await loadCoverPhotos(ctx, items.map(i => i.id));
   const profitOf = (i: (typeof items)[number]) => {
     const s = Array.isArray(i.sales) ? i.sales[0] : i.sales;
     if (!s) return null;
@@ -92,7 +95,8 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
             const live = item.listings.filter(l => ["active", "paused", "draft"].includes(l.status));
             return (
               <li key={item.id}>
-                <Link href={`/inventory/${item.id}`} className="flex items-center gap-4 px-4 py-3.5 hover:bg-white/[0.03]">
+                <Link href={`/inventory/${item.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-white/[0.03] sm:gap-4">
+                  <ItemThumb src={covers.get(item.id)} alt="" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-white">{item.name}</p>
                     <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-slate-400">

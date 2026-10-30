@@ -160,6 +160,21 @@ export type Note = {
   updated_at: string;
 };
 
+export type ItemPhoto = {
+  id: string;
+  household_id: string;
+  item_id: string;
+  /** Object key in the public item-photos bucket: <household_id>/<item_id>/<uuid>.<ext>. */
+  storage_path: string;
+  /** 0 is the cover photo. */
+  position: number;
+  width: number | null;
+  height: number | null;
+  bytes: number | null;
+  created_by: string;
+  created_at: string;
+};
+
 /** "5m ago", "3h ago", "Oct 12". */
 export function timeAgo(iso: string, now = Date.now()): string {
   const s = Math.max(0, Math.round((now - new Date(iso).getTime()) / 1000));

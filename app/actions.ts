@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getContext, requireHousehold } from "@/lib/household";
 import { estimateFees } from "@/lib/fees";
+import { attachPhotos, filesFrom } from "@/lib/photos";
 import { PLATFORMS, platformName } from "@/lib/platforms";
 import { CATEGORIES, ITEM_STATUSES, LISTING_STATUSES, num } from "@/lib/types";
 
@@ -104,6 +105,15 @@ export async function createItem(form: FormData) {
     .single();
   fail(error);
   await log(ctx, "item_created", "item", data!.id, { name: fields.name });
+  // Optional photos picked on the "Add an item" form. A bad photo shouldn't lose the item, so this is non-fatal.
+  const files = filesFrom(form);
+  if (files.length) {
+    try {
+      await attachPhotos(ctx, data!.id, files);
+    } catch (e) {
+      console.error("photos for new item failed:", e instanceof Error ? e.message : e);
+    }
+  }
   revalidatePath("/");
   redirect(form.get("another") ? "/inventory/new?added=1" : `/inventory/${data!.id}`);
 }

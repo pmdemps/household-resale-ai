@@ -5,10 +5,12 @@ import { addListing, recordOffer, recordSale, updateItem, updateListing } from "
 import { FeeBreakdown } from "@/components/fee-breakdown";
 import { FeeCalculator } from "@/components/fee-calculator";
 import { ItemForm } from "@/components/item-form";
+import { ItemPhotos } from "@/components/item-photos";
 import { OfferCard } from "@/components/offer-card";
 import { ProfitBadge } from "@/components/money";
 import { estimateFees } from "@/lib/fees";
 import { requireHousehold } from "@/lib/household";
+import { loadPhotos } from "@/lib/photos";
 import { PLATFORMS, platformById, platformName } from "@/lib/platforms";
 import { loadMemberNames, loadNotes, loadPendingOffers } from "@/lib/queries";
 import { NoteComposer, NotesList } from "@/components/notes";
@@ -19,7 +21,7 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
   const ctx = await requireHousehold();
   const hid = ctx.household.id;
 
-  const [itemRes, listingsRes, offersRes, saleRes, pending, comments, names] = await Promise.all([
+  const [itemRes, listingsRes, offersRes, saleRes, pending, comments, names, photos] = await Promise.all([
     ctx.supabase.from("inventory_items").select("*").eq("household_id", hid).eq("id", id).maybeSingle(),
     ctx.supabase.from("listings").select("*").eq("household_id", hid).eq("item_id", id).order("created_at"),
     ctx.supabase.from("offers").select("*, listings!inner(item_id, platform)").eq("household_id", hid).eq("listings.item_id", id).neq("status", "pending").order("received_at", { ascending: false }),
@@ -27,6 +29,7 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
     loadPendingOffers(ctx, id),
     loadNotes(ctx, { itemId: id }),
     loadMemberNames(ctx),
+    loadPhotos(ctx, id),
   ]);
   if (!itemRes.data) notFound();
   const item = itemRes.data as InventoryItem;
@@ -60,6 +63,8 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
           </div>
         </div>
       </header>
+
+      <ItemPhotos itemId={item.id} itemName={item.name} photos={photos} />
 
       {sale && (
         <section className="surface p-5">

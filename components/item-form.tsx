@@ -1,3 +1,4 @@
+import { MAX_PHOTOS_PER_ITEM } from "@/lib/photo-url";
 import { CATEGORIES, CONDITIONS, ITEM_STATUSES, itemStatusLabel, type InventoryItem } from "@/lib/types";
 
 type Props = {
@@ -65,6 +66,20 @@ export function ItemForm({ action, item }: Props) {
       <Field label="Notes" htmlFor="notes" hint="Flaws, details, anything a buyer should know">
         <textarea id="notes" name="notes" rows={3} className="field" maxLength={4000} defaultValue={item?.notes ?? ""} />
       </Field>
+
+      {!editing && (
+        <Field label="Photos" htmlFor="files" hint={`Optional · up to ${MAX_PHOTOS_PER_ITEM}, 10 MB each`}>
+          <input
+            id="files"
+            name="files"
+            type="file"
+            accept="image/*"
+            multiple
+            className="field cursor-pointer py-2 file:mr-3 file:rounded-lg file:border-0 file:bg-accent/20 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-link"
+          />
+          <p className="mt-1.5 text-[11px] text-slate-500">The first photo becomes the cover. You can add more on the item page.</p>
+        </Field>
+      )}
       <input type="hidden" name="source" value={item?.source ?? "Household"} />
 
       <div className="flex flex-wrap justify-end gap-2 border-t border-line pt-4">
