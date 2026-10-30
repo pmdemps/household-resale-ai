@@ -40,7 +40,7 @@ export async function MarketplaceConnections({ ctx }: Props) {
             <div className="min-w-0">
               <p className="text-sm font-medium text-white">
                 eBay
-                <span className={`ml-2 rounded px-1.5 py-0.5 text-[10px] ${env === "production" ? "bg-accent/15 text-accent" : "bg-warn/15 text-warn"}`}>{env}</span>
+                <span className={`ml-2 rounded px-1.5 py-0.5 text-[10px] ${env === "production" ? "bg-accent/15 text-link" : "bg-warn/15 text-warn"}`}>{env}</span>
               </p>
               {!configured && (
                 <p className="mt-1 text-xs leading-5 text-slate-400">
@@ -84,7 +84,7 @@ export async function MarketplaceConnections({ ctx }: Props) {
 
           {configured && (
             <details className="mt-3 text-sm" open={active && !shipFrom}>
-              <summary className="cursor-pointer text-xs text-accent">Ship-from location {shipFrom ? `· ${shipFrom.city}, ${shipFrom.stateOrProvince} ${shipFrom.postalCode}` : "· needed before your first eBay listing"}</summary>
+              <summary className="cursor-pointer text-xs text-link">Ship-from location {shipFrom ? `· ${shipFrom.city}, ${shipFrom.stateOrProvince} ${shipFrom.postalCode}` : "· needed before your first eBay listing"}</summary>
               <form action={saveEbayShipFrom} className="mt-2 flex flex-wrap gap-2">
                 <input name="city" required maxLength={80} defaultValue={shipFrom?.city ?? ""} className="field min-w-[10rem] flex-1" placeholder="City" />
                 <input name="state" required maxLength={2} defaultValue={shipFrom?.stateOrProvince ?? ""} className="field w-20 uppercase" placeholder="ST" />

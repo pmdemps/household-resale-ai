@@ -9,7 +9,7 @@ import { byPlatform as platformRows, monthlyProfit, saleNet, saleProfit, summari
 type Ctx = AppContext & { household: { id: string } };
 
 type RawOffer = {
-  id: string; amount: number; buyer_handle: string | null; received_at: string; note: string | null;
+  id: string; amount: number; buyer_handle: string | null; received_at: string; note: string | null; external_id: string | null;
   listings: {
     id: string; platform: string; list_price: number; listing_url: string | null;
     inventory_items: { id: string; name: string; purchase_cost: number; floor_price: number | null };
@@ -19,7 +19,7 @@ type RawOffer = {
 export async function loadPendingOffers(ctx: Ctx, itemId?: string): Promise<OfferWithContext[]> {
   let q = ctx.supabase
     .from("offers")
-    .select("id, amount, buyer_handle, received_at, note, listings!inner(id, platform, list_price, listing_url, item_id, inventory_items!inner(id, name, purchase_cost, floor_price))")
+    .select("id, amount, buyer_handle, received_at, note, external_id, listings!inner(id, platform, list_price, listing_url, item_id, inventory_items!inner(id, name, purchase_cost, floor_price))")
     .eq("household_id", ctx.household.id)
     .eq("status", "pending")
     .order("received_at", { ascending: false });
@@ -32,6 +32,7 @@ export async function loadPendingOffers(ctx: Ctx, itemId?: string): Promise<Offe
     buyer_handle: o.buyer_handle,
     received_at: o.received_at,
     note: o.note,
+    external_id: o.external_id ?? null,
     listing: { id: o.listings.id, platform: o.listings.platform, list_price: num(o.listings.list_price), listing_url: o.listings.listing_url },
     item: {
       id: o.listings.inventory_items.id,

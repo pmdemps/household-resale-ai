@@ -13,6 +13,8 @@ export type OfferWithContext = {
   buyer_handle: string | null;
   received_at: string;
   note: string | null;
+  /** Marketplace id of the offer (eBay BestOfferID) when it was pulled in through an API; null for offers typed in by hand. */
+  external_id?: string | null;
   listing: { id: string; platform: string; list_price: number; listing_url: string | null };
   item: { id: string; name: string; purchase_cost: number; floor_price: number | null };
 };
@@ -95,8 +97,14 @@ export function OfferCard({ offer }: { offer: OfferWithContext }) {
         </form>
       </div>
       <p className="mt-2 text-[11px] text-slate-500">
-        This records your decision here. Until the {platformName(offer.listing.platform)} integration is live, also tap the same button in the
-        {" "}{platformName(offer.listing.platform)} app{offer.listing.listing_url ? <> (<a className="text-link hover:underline" href={offer.listing.listing_url} target="_blank" rel="noreferrer">open listing</a>)</> : ""}.
+        {offer.listing.platform === "ebay" && offer.external_id ? (
+          <>This offer came from eBay, so your answer is sent to eBay for you. If that fails you&apos;ll see a note in To do asking you to do it in the eBay app too.</>
+        ) : (
+          <>
+            This records your decision here. Until the {platformName(offer.listing.platform)} integration is live, also tap the same button in the
+            {" "}{platformName(offer.listing.platform)} app{offer.listing.listing_url ? <> (<a className="text-link hover:underline" href={offer.listing.listing_url} target="_blank" rel="noreferrer">open listing</a>)</> : ""}.
+          </>
+        )}
       </p>
     </article>
   );

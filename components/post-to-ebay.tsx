@@ -36,7 +36,7 @@ export async function PostToEbay({ item, listings, hasEbayConnection, photoCount
     <section className="surface p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-base font-semibold text-white">eBay</h2>
-        <span className={`rounded px-1.5 py-0.5 text-[10px] ${env === "production" ? "bg-accent/15 text-accent" : "bg-warn/15 text-warn"}`}>{env}</span>
+        <span className={`rounded px-1.5 py-0.5 text-[10px] ${env === "production" ? "bg-accent/15 text-link" : "bg-warn/15 text-warn"}`}>{env}</span>
       </div>
 
       {notice && (
@@ -45,7 +45,7 @@ export async function PostToEbay({ item, listings, hasEbayConnection, photoCount
 
       {!hasEbayConnection && (
         <p className="mt-2 text-sm text-slate-400">
-          eBay isn&apos;t connected yet. <Link href="/settings" className="text-accent hover:underline">Connect it in Settings</Link> and you can post from here with one tap.
+          eBay isn&apos;t connected yet. <Link href="/settings" className="text-link hover:underline">Connect it in Settings</Link> and you can post from here with one tap.
         </p>
       )}
 
@@ -54,7 +54,7 @@ export async function PostToEbay({ item, listings, hasEbayConnection, photoCount
           <p className="text-sm text-slate-300">
             <span className="font-medium text-white">{live.status === "active" ? "Live" : "Paused"}</span> at {money(num(live.list_price))}
             {live.listing_url && (
-              <a href={live.listing_url} target="_blank" rel="noreferrer" className="ml-2 inline-flex items-center gap-1 text-xs text-accent hover:underline">Open on eBay <ExternalLink size={12} /></a>
+              <a href={live.listing_url} target="_blank" rel="noreferrer" className="ml-2 inline-flex items-center gap-1 text-xs text-link hover:underline">Open on eBay <ExternalLink size={12} /></a>
             )}
           </p>
           <p className="text-xs text-slate-500">You&apos;d keep about {money(est.payout)} after eBay fees{floor !== null ? ` · offers under ${money(floor)} are auto-declined` : ""}.</p>

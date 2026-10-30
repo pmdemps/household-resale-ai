@@ -53,6 +53,7 @@ export default async function MoneyPage() {
             <div className="mt-3 sm:hidden"><MonthlyProfitChart points={sixMonths} width={360} height={230} titleId="chart-6" /></div>
             <div className="mt-3 hidden sm:block"><MonthlyProfitChart points={data.months} width={720} height={260} titleId="chart-12" /></div>
             <p className="mt-2 text-xs text-slate-500"><span className="sm:hidden">Last 6 months. </span><span className="hidden sm:inline">Last 12 months. </span>This month is highlighted. Tap or hover a month for the exact amount.</p>
+            <p className="mt-1 text-xs text-slate-500">Months are counted in UTC, so a sale after 8 pm Eastern on the last day of a month lands in the next month. Every page uses the same rule.</p>
             <details className="mt-3">
               <summary className="cursor-pointer text-sm font-medium text-link">See the numbers</summary>
               <div className="mt-3"><MonthTable points={data.months} /></div>

@@ -68,7 +68,7 @@ export function ItemForm({ action, item }: Props) {
       </Field>
 
       {!editing && (
-        <Field label="Photos" htmlFor="files" hint={`Optional · up to ${MAX_PHOTOS_PER_ITEM}, 10 MB each`}>
+        <Field label="Photos" htmlFor="files" hint={`Optional · a few now (they're saved with the item in one go), up to ${MAX_PHOTOS_PER_ITEM} in total`}>
           <input
             id="files"
             name="files"
