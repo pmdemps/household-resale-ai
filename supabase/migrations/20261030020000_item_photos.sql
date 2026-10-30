@@ -4,7 +4,9 @@
 -- Files live in the Supabase Storage bucket `item-photos`. The bucket is PUBLIC on purpose:
 -- marketplaces (eBay, Etsy) fetch listing images by plain HTTPS URL, so every photo has to be
 -- publicly readable. Object paths are unguessable: <household_id>/<item_id>/<random uuid>.<ext>.
--- Writing to the bucket is limited to members of the household named by the first path segment.
+-- Writing to the bucket, and listing what is in it, is limited to members of the household named by
+-- the first path segment. The browser uploads straight into the bucket with the member's JWT
+-- (components/photo-uploader.tsx) and then records the row via a server action.
 
 -- ---------------------------------------------------------------------------
 -- Table: one row per photo, ordered by position (0 = cover photo)
@@ -73,9 +75,14 @@ $$;
 revoke all on function public.is_item_photo_path_member(text) from public;
 grant execute on function public.is_item_photo_path_member(text) to authenticated;
 
+-- Reading the FILES needs no policy: the bucket is public, so /storage/v1/object/public/... serves them
+-- without consulting storage.objects RLS. A select policy only governs the list/metadata API, and a
+-- select policy open to anon would let anyone holding the publishable key enumerate every household's
+-- object paths. So listing is for signed-in members of the household in the first path segment only.
 drop policy if exists "Anyone can view item photos" on storage.objects;
-create policy "Anyone can view item photos" on storage.objects for select
-  using (bucket_id = 'item-photos');
+drop policy if exists "Members view item photos" on storage.objects;
+create policy "Members view item photos" on storage.objects for select to authenticated
+  using (bucket_id = 'item-photos' and public.is_item_photo_path_member(name));
 drop policy if exists "Members upload item photos" on storage.objects;
 create policy "Members upload item photos" on storage.objects for insert to authenticated
   with check (bucket_id = 'item-photos' and public.is_item_photo_path_member(name));

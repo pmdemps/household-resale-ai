@@ -34,9 +34,10 @@ await db.exec(`
   create function storage.foldername(name text) returns text[] language plpgsql immutable as $$
     declare _parts text[];
     begin select string_to_array(name, '/') into _parts; return _parts[1:array_length(_parts, 1) - 1]; end $$;
-  grant usage on schema storage to authenticated;
-  grant select on storage.buckets to authenticated;
-  grant select, insert, update, delete on storage.objects to authenticated;
+  -- Supabase grants these table privileges to anon as well; RLS policies are what actually protect objects.
+  grant usage on schema storage to authenticated, anon;
+  grant select on storage.buckets to authenticated, anon;
+  grant select, insert, update, delete on storage.objects to authenticated, anon;
 `);
 
 for (const f of fs.readdirSync(dir).filter(f => f.endsWith(".sql")).sort()) {
@@ -51,6 +52,11 @@ console.log("re-applied OK");
 
 async function as(user, sql, params = []) {
   await db.exec(`reset role; select set_config('request.jwt.claim.sub', '${user}', false); set role authenticated;`);
+  try { return await db.query(sql, params); } finally { await db.exec("reset role;"); }
+}
+/** Holder of the publishable key with no session (what a stranger on the internet gets). */
+async function asAnon(sql, params = []) {
+  await db.exec(`reset role; select set_config('request.jwt.claim.sub', '', false); set role anon;`);
   try { return await db.query(sql, params); } finally { await db.exec("reset role;"); }
 }
 let failures = 0;
@@ -110,9 +116,13 @@ await expectError(() => as(A, `insert into public.item_photos (household_id, ite
 check((await as(B, "update public.item_photos set position = 5 returning id")).rows.length === 0, "non-member cannot reorder photos");
 check((await as(B, "delete from public.item_photos returning id")).rows.length === 0, "non-member cannot delete photos");
 check((await as(A, "update public.item_photos set position = 3 where id = $1 returning id", [photo.id])).rows.length === 1, "member reorders photos");
-// storage.objects: write access follows the household id in the first path segment; read is public.
+// storage.objects: write access AND listing follow the household id in the first path segment. The files
+// themselves are served by the public-bucket URL, which does not consult these policies.
 await as(A, "insert into storage.objects (bucket_id, name, owner) values ('item-photos', $1, $2)", [photoPath, A]);
 check(true, "member uploads into own household folder");
+check((await as(A, "insert into storage.objects (bucket_id, name, owner) values ('item-photos', $1, $2) returning id", [`${hA}/${item}/second.jpg`, A])).rows.length === 1,
+  "upload with RETURNING works for a member (the select policy admits the uploader's own folder)");
+await as(A, "delete from storage.objects where name = $1", [`${hA}/${item}/second.jpg`]);
 await expectError(() => as(B, "insert into storage.objects (bucket_id, name, owner) values ('item-photos', $1, $2)", [`${hA}/${item}/intruder.jpg`, B]),
   "non-member cannot upload into another household's folder");
 await expectError(() => as(B, "insert into storage.objects (bucket_id, name, owner) values ('item-photos', $1, $2)", ["not-a-uuid/x.jpg", B]),
@@ -121,7 +131,12 @@ await db.query("insert into storage.buckets (id, name) values ('other-bucket', '
 await expectError(() => as(A, "insert into storage.objects (bucket_id, name, owner) values ('other-bucket', $1, $2)", [`${hA}/x.jpg`, A]),
   "no write access to other buckets");
 await as(B, "insert into storage.objects (bucket_id, name, owner) values ('item-photos', $1, $2)", [`${hB}/some-item/own.jpg`, B]);
-check((await as(B, "select name from storage.objects where bucket_id = 'item-photos'")).rows.length === 2, "photos are publicly readable (public bucket)");
+check((await as(B, "select name from storage.objects where bucket_id = 'item-photos'")).rows.map(r => r.name).join() === `${hB}/some-item/own.jpg`,
+  "a member lists only their own household's object paths");
+check((await asAnon("select name from storage.objects where bucket_id = 'item-photos'")).rows.length === 0,
+  "anon cannot list any object paths (no select policy for anon; files are still served by the public URL)");
+await expectError(() => asAnon("insert into storage.objects (bucket_id, name, owner) values ('item-photos', $1, null)", [`${hA}/${item}/anon.jpg`]),
+  "anon cannot upload");
 check((await as(B, "delete from storage.objects where name = $1 returning id", [photoPath])).rows.length === 0, "non-member cannot delete another household's photo file");
 check((await as(A, "delete from storage.objects where name = $1 returning id", [photoPath])).rows.length === 1, "member deletes own household's photo file");
 await as(A, "delete from public.item_photos where id = $1", [photo.id]);
@@ -159,10 +174,6 @@ check((await as(B, "delete from public.notes where id = $1 returning id", [note.
 // C is a fresh user with no household membership at all.
 const C = "33333333-3333-3333-3333-333333333333";
 await db.exec(`insert into auth.users values ('${C}', 'c@example.com')`);
-async function asAnon(sql, params = []) {
-  await db.exec(`reset role; select set_config('request.jwt.claim.sub', '', false); set role anon;`);
-  try { return await db.query(sql, params); } finally { await db.exec("reset role;"); }
-}
 
 const conn = (await as(A, `insert into public.marketplace_connections
   (household_id, platform, environment, account_handle, external_user_id, access_token_enc, refresh_token_enc, scopes, connected_by)

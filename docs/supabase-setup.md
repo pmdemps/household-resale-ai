@@ -17,8 +17,7 @@ The schema uses row-level security: inventory is scoped to household membership,
 Item photos live in a Storage bucket called `item-photos`. The migration `20261030020000_item_photos.sql` creates the bucket itself (`insert into storage.buckets …`) along with the `item_photos` table and the object policies, so there is nothing to click through in **Storage → New bucket**. After applying it, check in the dashboard that:
 
 - **Storage → item-photos** exists and is marked **Public**, with a 10 MB file size limit and allowed types `image/jpeg, image/png, image/webp, image/heic`. Public is deliberate: eBay and Etsy fetch listing images by plain URL, and object paths are unguessable (`<household id>/<item id>/<random uuid>.jpg`).
-- **Storage → Policies → item-photos** shows four policies: anyone can view; members upload / update / delete only under their own household's folder (`public.is_item_photo_path_member`).
-- Uploads go through the app with the signed-in user's JWT, so the RLS above is what protects writes. No service-role key is involved.
+- **Storage → Policies → item-photos** shows four policies, all for `authenticated` and all limited to the household folder in the first path segment (`public.is_item_photo_path_member`): members view/list, upload, update and delete. There is deliberately **no** policy for `anon`: the files are served by the public-bucket URL, which never consults these policies, while a select policy open to anon would let anyone with the publishable key list every household's object paths.
 
 If the migration is ever applied by a tool that lacks rights on the `storage` schema, create the bucket by hand with those settings and re-run just the `storage.*` statements from the migration in the SQL editor.
 
