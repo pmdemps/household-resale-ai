@@ -9,6 +9,38 @@ export type ListingStatus = (typeof LISTING_STATUSES)[number];
 export const OFFER_STATUSES = ["pending", "accepted", "declined", "countered", "expired", "withdrawn"] as const;
 export type OfferStatus = (typeof OFFER_STATUSES)[number];
 
+/** Plain words for the screen. The database keeps the raw status values above. */
+export const ITEM_STATUS_LABELS: Record<ItemStatus, string> = {
+  researching: "Not listed yet",
+  draft: "Not listed yet",
+  listed: "For sale",
+  pending_sale: "Sale pending",
+  sold: "Sold",
+  returned: "Returned",
+  donated: "Donated",
+  discarded: "Discarded",
+};
+export const itemStatusLabel = (status: string): string => ITEM_STATUS_LABELS[status as ItemStatus] ?? status.replace(/_/g, " ");
+
+export const LISTING_STATUS_LABELS: Record<ListingStatus, string> = {
+  draft: "Draft",
+  active: "Live",
+  paused: "Paused",
+  sold: "Sold",
+  ended: "Ended",
+};
+export const listingStatusLabel = (status: string): string => LISTING_STATUS_LABELS[status as ListingStatus] ?? status.replace(/_/g, " ");
+
+export const OFFER_STATUS_LABELS: Record<OfferStatus, string> = {
+  pending: "Waiting on you",
+  accepted: "Accepted",
+  declined: "Declined",
+  countered: "Countered",
+  expired: "Expired",
+  withdrawn: "Withdrawn",
+};
+export const offerStatusLabel = (status: string): string => OFFER_STATUS_LABELS[status as OfferStatus] ?? status.replace(/_/g, " ");
+
 export const CATEGORIES = ["Clothing", "Shoes", "Toys & games", "Kids & baby", "Home & kitchen", "Electronics", "Tools", "Books & media", "Collectibles", "Other"] as const;
 
 export const CONDITIONS = ["New with tags", "New without tags", "Like new", "Good", "Fair", "For parts"] as const;
