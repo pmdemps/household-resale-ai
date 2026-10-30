@@ -1,7 +1,7 @@
 import "server-only";
 import type { AppContext } from "@/lib/household";
 import type { OfferWithContext } from "@/components/offer-card";
-import type { AgentTask, InventoryItem, Listing, Sale } from "@/lib/types";
+import type { AgentTask, InventoryItem, Listing, Note, Sale } from "@/lib/types";
 import { num } from "@/lib/types";
 
 type Ctx = AppContext & { household: { id: string } };
@@ -43,7 +43,7 @@ export async function loadPendingOffers(ctx: Ctx, itemId?: string): Promise<Offe
 export async function loadOverview(ctx: Ctx) {
   const hid = ctx.household.id;
   const [items, listings, sales, tasks, activity] = await Promise.all([
-    ctx.supabase.from("inventory_items").select("id, status, purchase_cost, target_price").eq("household_id", hid),
+    ctx.supabase.from("inventory_items").select("id, name, status, purchase_cost, target_price").eq("household_id", hid),
     ctx.supabase.from("listings").select("id, status, list_price, platform").eq("household_id", hid),
     ctx.supabase.from("sales").select("*").eq("household_id", hid).order("sold_at", { ascending: false }),
     ctx.supabase.from("agent_tasks").select("*").eq("household_id", hid).eq("status", "pending").neq("kind", "offer_decision").order("created_at", { ascending: false }),
@@ -51,7 +51,7 @@ export async function loadOverview(ctx: Ctx) {
   ]);
   for (const r of [items, listings, sales, tasks, activity]) if (r.error) throw new Error(r.error.message);
 
-  const itemRows = (items.data ?? []) as Pick<InventoryItem, "id" | "status" | "purchase_cost" | "target_price">[];
+  const itemRows = (items.data ?? []) as Pick<InventoryItem, "id" | "name" | "status" | "purchase_cost" | "target_price">[];
   const listingRows = (listings.data ?? []) as Pick<Listing, "id" | "status" | "list_price" | "platform">[];
   const saleRows = (sales.data ?? []) as Sale[];
   const costById = new Map(itemRows.map(i => [i.id, num(i.purchase_cost)]));
@@ -80,7 +80,20 @@ export async function loadOverview(ctx: Ctx) {
     byPlatform.set(s.platform, e);
   }
 
+  const nameById = new Map(itemRows.map(i => [i.id, i.name]));
+  const salePayout = (x: Sale) => num(x.sale_price) + num(x.shipping_charged) - num(x.platform_fees) - num(x.shipping_cost) - num(x.other_costs);
+  const recentSales = saleRows.slice(0, 6).map(x => ({
+    id: x.id,
+    itemId: x.item_id,
+    name: nameById.get(x.item_id) ?? "Item",
+    platform: x.platform,
+    soldAt: x.sold_at,
+    payout: salePayout(x),
+    profit: salePayout(x) - (costById.get(x.item_id) ?? 0),
+  }));
+
   return {
+    recentSales,
     counts: {
       unsold: unsold.length,
       needsListing: unsold.filter(i => i.status === "draft" || i.status === "researching").length,
@@ -95,4 +108,33 @@ export async function loadOverview(ctx: Ctx) {
     tasks: (tasks.data ?? []) as AgentTask[],
     activity: activity.data ?? [],
   };
+}
+
+export type MemberNames = Record<string, string>;
+
+/** user_id -> display name for everyone in the household. */
+export async function loadMemberNames(ctx: Ctx): Promise<MemberNames> {
+  const { data } = await ctx.supabase
+    .from("household_members")
+    .select("user_id, display_name, role")
+    .eq("household_id", ctx.household.id)
+    .order("created_at");
+  const names: MemberNames = {};
+  (data ?? []).forEach((m, i) => {
+    names[m.user_id as string] = (m.display_name as string | null)?.trim() || (m.user_id === ctx.userId ? "You" : `Member ${i + 1}`);
+  });
+  return names;
+}
+
+export async function loadNotes(ctx: Ctx, opts: { itemId?: string; limit?: number } = {}) {
+  let q = ctx.supabase
+    .from("notes")
+    .select("*, inventory_items(id, name)")
+    .eq("household_id", ctx.household.id);
+  if (opts.itemId) q = q.eq("item_id", opts.itemId).order("created_at", { ascending: true });
+  else q = q.order("pinned", { ascending: false }).order("created_at", { ascending: false });
+  if (opts.limit) q = q.limit(opts.limit);
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  return (data ?? []) as (Note & { inventory_items: { id: string; name: string } | null })[];
 }

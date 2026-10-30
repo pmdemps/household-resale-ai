@@ -12,7 +12,7 @@ export default async function NewItemPage({ searchParams }: { searchParams: Prom
         <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white">Add an item</h1>
       </header>
       {added && (
-        <p className="flex items-center gap-2 rounded-xl border border-emerald-400/20 bg-emerald-400/[0.07] px-4 py-2.5 text-sm text-emerald-200">
+        <p className="flex items-center gap-2 rounded-xl border border-good/20 bg-good/[0.07] px-4 py-2.5 text-sm text-good">
           <CheckCircle2 size={16} /> Saved. Next one.
         </p>
       )}

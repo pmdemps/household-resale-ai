@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AlertTriangle, Check, Repeat, X } from "lucide-react";
 import { decideOffer } from "@/app/actions";
 import { FeeBreakdown } from "@/components/fee-breakdown";
+import { ProfitBadge } from "@/components/money";
 import { estimateFees } from "@/lib/fees";
 import { platformName } from "@/lib/platforms";
 import { money, num } from "@/lib/types";
@@ -40,11 +41,14 @@ export function OfferCard({ offer }: { offer: OfferWithContext }) {
             {offer.buyer_handle && <span className="text-slate-500"> · from {offer.buyer_handle}</span>}
           </p>
         </div>
-        <p className="text-2xl font-semibold tabular-nums text-white">{money(amount)}</p>
+        <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:flex-col sm:items-end sm:gap-1">
+          <p className="text-2xl font-semibold tabular-nums text-white">{money(amount)}</p>
+          <div><ProfitBadge value={atOffer.profit} label={atOffer.profit < 0 ? "you'd lose" : "you'd make"} size="md" /></div>
+        </div>
       </div>
 
       {belowFloor && (
-        <p className="mt-3 flex items-center gap-2 rounded-lg border border-amber-300/20 bg-amber-300/[0.07] px-3 py-2 text-xs text-amber-100">
+        <p className="mt-3 flex items-center gap-2 rounded-lg border border-warn/20 bg-warn/[0.07] px-3 py-2 text-xs text-warn">
           <AlertTriangle size={14} /> Below your floor price of {money(floor!)}.
         </p>
       )}

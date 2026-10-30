@@ -22,6 +22,10 @@ export default async function SetupPage() {
             <label htmlFor="name" className="mb-1.5 block text-xs text-slate-300">Household name</label>
             <input id="name" name="name" className="field" placeholder="Our house" maxLength={120} required />
           </div>
+          <div>
+            <label htmlFor="display_name" className="mb-1.5 block text-xs text-slate-300">Your first name</label>
+            <input id="display_name" name="display_name" className="field" maxLength={40} placeholder="Shown on your notes" />
+          </div>
           <button className="btn-primary w-full">Create household</button>
         </form>
         <p className="mt-4 text-xs text-slate-500">Signed in as {ctx.email}</p>

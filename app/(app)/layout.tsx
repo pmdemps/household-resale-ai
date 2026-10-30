@@ -1,8 +1,11 @@
 import Link from "next/link";
-import { LogOut, ShoppingBag } from "lucide-react";
+import { LogOut, Settings, ShoppingBag } from "lucide-react";
 import { BottomNav, SideNav } from "@/components/nav";
 import { signOut } from "@/app/actions";
 import { isSupabaseConfigured, requireHousehold } from "@/lib/household";
+import { cookies } from "next/headers";
+import { ThemeQuickToggle } from "@/components/theme-toggle";
+import { THEME_COOKIE, parseTheme } from "@/lib/theme";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +19,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .eq("household_id", ctx.household.id)
     .eq("status", "pending");
   const pending = count ?? 0;
+  const theme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
 
   return (
     <div className="mx-auto flex min-h-screen max-w-[1500px]">
@@ -28,13 +32,29 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
         </Link>
         <SideNav pendingCount={pending} />
-        <form action={signOut} className="mt-auto">
+        <div className="mt-auto flex items-center justify-between px-1">
+          <span className="text-xs text-slate-500">Theme</span>
+          <ThemeQuickToggle initial={theme} />
+        </div>
+        <form action={signOut} className="mt-2">
           <button className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-slate-500 hover:bg-white/[0.04] hover:text-white">
             <LogOut size={16} /> Sign out
           </button>
         </form>
       </aside>
-      <main className="min-w-0 flex-1 px-4 pb-28 pt-5 sm:px-7 lg:px-10 lg:pb-10 lg:pt-8">{children}</main>
+      <main className="min-w-0 flex-1 px-4 pb-28 pt-4 sm:px-7 lg:px-10 lg:pb-10 lg:pt-8">
+        <div className="mb-4 flex items-center justify-between lg:hidden">
+          <Link href="/" className="flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent text-ink"><ShoppingBag size={17} /></span>
+            <span className="text-sm font-semibold text-white">Resale HQ</span>
+          </Link>
+          <div className="flex items-center gap-1">
+            <ThemeQuickToggle initial={theme} />
+            <Link href="/settings" className="rounded-xl p-2 text-slate-400 hover:bg-white/[0.06] hover:text-white" aria-label="Settings"><Settings size={19} /></Link>
+          </div>
+        </div>
+        {children}
+      </main>
       <BottomNav pendingCount={pending} />
     </div>
   );

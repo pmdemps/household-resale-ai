@@ -80,5 +80,27 @@ check((await as(B, "select * from public.offers")).rows.length === 1, "new membe
 check((await as(B, "select * from public.household_members where household_id = $1", [hA])).rows.length === 2, "members see co-members");
 await expectError(() => as(B, "delete from public.listings where household_id = $1 returning id", [hA]).then(r => { if (r.rows.length === 0) throw new Error("blocked"); }), "member (non-admin) cannot delete listings");
 
+// --- notes & display names (B is now a member of A's household) ---
+await as(A, "update public.household_members set display_name = 'Alex' where user_id = $1", [A]);
+await as(B, "update public.household_members set display_name = 'Sam' where user_id = $1", [B]);
+check((await as(A, "select display_name from public.household_members where household_id = $1 order by display_name", [hA])).rows.map(r => r.display_name).join(",") === "Alex,Sam", "members set own display names");
+const renamed = await as(B, "update public.household_members set display_name = 'Hacked' where user_id = $1 returning user_id", [A]);
+check(renamed.rows.length === 0, "cannot rename another member");
+await expectError(() => as(B, "update public.household_members set role = 'admin' where user_id = $1", [B]), "member cannot promote self to admin");
+
+const note = (await as(B, "insert into public.notes (household_id, body) values ($1, 'Grandma wants the blue sweater') returning id, author", [hA])).rows[0];
+check(note.author === B, "note author defaults to current user");
+await as(A, "insert into public.notes (household_id, item_id, body) values ($1, $2, 'Scuff on left toe')", [hA, item]);
+check((await as(B, "select * from public.notes where item_id = $1", [item])).rows.length === 1, "item comment visible to co-member");
+await expectError(() => as(B, "insert into public.notes (household_id, body, author) values ($1, 'spoof', $2)", [hA, A]), "cannot post as someone else");
+await expectError(() => as(A, "update public.notes set body = 'edited' where id = $1", [note.id]), "cannot edit someone else's note text");
+check((await as(A, "update public.notes set pinned = true where id = $1 returning id", [note.id])).rows.length === 1, "any member can pin");
+await expectError(() => as(A, "update public.notes set item_id = $2 where id = $1", [note.id, item]), "notes cannot be moved to another item");
+const otherHouseNote = await as(B, "insert into public.notes (household_id, body) values ($1, 'B house only') returning id", [hB]);
+check(otherHouseNote.rows.length === 1, "B writes in own household");
+check((await as(A, "select * from public.notes where household_id = $1", [hB])).rows.length === 0, "notes don't leak across households");
+await expectError(() => as(A, "insert into public.notes (household_id, item_id, body) values ($1, $2, 'x')", [hB, item]), "cannot attach note to another household's item");
+check((await as(B, "delete from public.notes where id = $1 returning id", [note.id])).rows.length === 1, "author deletes own note");
+
 console.log(failures ? `${failures} FAILED` : "ALL PASSED");
 process.exit(failures ? 1 : 0);

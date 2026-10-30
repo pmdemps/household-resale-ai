@@ -3,6 +3,7 @@ import { Download, MapPin, Plus, Search } from "lucide-react";
 import { requireHousehold } from "@/lib/household";
 import { platformName } from "@/lib/platforms";
 import { money, num, type InventoryItem } from "@/lib/types";
+import { ProfitBadge } from "@/components/money";
 
 const FILTERS = [
   { id: "open", label: "To sell" },
@@ -16,9 +17,9 @@ const STATUS_STYLE: Record<string, string> = {
   draft: "bg-slate-400/10 text-slate-300",
   researching: "bg-slate-400/10 text-slate-300",
   listed: "bg-accent/15 text-accent",
-  pending_sale: "bg-amber-300/15 text-amber-200",
-  sold: "bg-emerald-400/15 text-emerald-300",
-  returned: "bg-rose-400/15 text-rose-300",
+  pending_sale: "bg-warn/15 text-warn",
+  sold: "bg-good/15 text-good",
+  returned: "bg-bad/15 text-bad",
   donated: "bg-slate-400/10 text-slate-400",
   discarded: "bg-slate-400/10 text-slate-500",
 };
@@ -29,7 +30,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
 
   let query = ctx.supabase
     .from("inventory_items")
-    .select("*, listings(platform, status, list_price)")
+    .select("*, listings(platform, status, list_price), sales(sale_price, shipping_charged, platform_fees, shipping_cost, other_costs)")
     .eq("household_id", ctx.household.id)
     .order("created_at", { ascending: false })
     .limit(500);
@@ -42,7 +43,13 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
 
   const { data, error } = await query;
   if (error) throw new Error(error.message);
-  const items = (data ?? []) as (InventoryItem & { listings: { platform: string; status: string; list_price: number }[] })[];
+  type SaleLite = { sale_price: number; shipping_charged: number; platform_fees: number; shipping_cost: number; other_costs: number };
+  const items = (data ?? []) as (InventoryItem & { listings: { platform: string; status: string; list_price: number }[]; sales: SaleLite[] | SaleLite | null })[];
+  const profitOf = (i: (typeof items)[number]) => {
+    const s = Array.isArray(i.sales) ? i.sales[0] : i.sales;
+    if (!s) return null;
+    return num(s.sale_price) + num(s.shipping_charged) - num(s.platform_fees) - num(s.shipping_cost) - num(s.other_costs) - num(i.purchase_cost);
+  };
 
   return (
     <div className="space-y-5">
@@ -99,9 +106,11 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
                   </div>
                   <div className="shrink-0 text-right">
                     <span className={"rounded-full px-2 py-0.5 text-[11px] " + (STATUS_STYLE[item.status] ?? "")}>{item.status.replace("_", " ")}</span>
-                    <p className="mt-1 text-sm tabular-nums text-slate-200">
-                      {item.status === "sold" && item.sold_price !== null ? money(num(item.sold_price)) : num(item.target_price) > 0 ? money(num(item.target_price)) : "—"}
-                    </p>
+                    {item.status === "sold" && profitOf(item) !== null ? (
+                      <div className="mt-1"><ProfitBadge value={profitOf(item)!} /></div>
+                    ) : (
+                      <p className="mt-1 text-sm tabular-nums text-slate-200">{num(item.target_price) > 0 ? money(num(item.target_price)) : "—"}</p>
+                    )}
                   </div>
                 </Link>
               </li>

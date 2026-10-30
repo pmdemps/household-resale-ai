@@ -6,10 +6,12 @@ import { FeeBreakdown } from "@/components/fee-breakdown";
 import { FeeCalculator } from "@/components/fee-calculator";
 import { ItemForm } from "@/components/item-form";
 import { OfferCard } from "@/components/offer-card";
+import { ProfitBadge } from "@/components/money";
 import { estimateFees } from "@/lib/fees";
 import { requireHousehold } from "@/lib/household";
 import { PLATFORMS, platformById, platformName } from "@/lib/platforms";
-import { loadPendingOffers } from "@/lib/queries";
+import { loadMemberNames, loadNotes, loadPendingOffers } from "@/lib/queries";
+import { NoteComposer, NotesList } from "@/components/notes";
 import { money, num, type InventoryItem, type Listing, type Offer, type Sale } from "@/lib/types";
 
 export default async function ItemPage({ params }: { params: Promise<{ id: string }> }) {
@@ -17,12 +19,14 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
   const ctx = await requireHousehold();
   const hid = ctx.household.id;
 
-  const [itemRes, listingsRes, offersRes, saleRes, pending] = await Promise.all([
+  const [itemRes, listingsRes, offersRes, saleRes, pending, comments, names] = await Promise.all([
     ctx.supabase.from("inventory_items").select("*").eq("household_id", hid).eq("id", id).maybeSingle(),
     ctx.supabase.from("listings").select("*").eq("household_id", hid).eq("item_id", id).order("created_at"),
     ctx.supabase.from("offers").select("*, listings!inner(item_id, platform)").eq("household_id", hid).eq("listings.item_id", id).neq("status", "pending").order("received_at", { ascending: false }),
     ctx.supabase.from("sales").select("*").eq("household_id", hid).eq("item_id", id).maybeSingle(),
     loadPendingOffers(ctx, id),
+    loadNotes(ctx, { itemId: id }),
+    loadMemberNames(ctx),
   ]);
   if (!itemRes.data) notFound();
   const item = itemRes.data as InventoryItem;
@@ -64,7 +68,10 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
             <Metric label="Sale price" value={money(num(sale.sale_price))} />
             <Metric label="Fees" value={money(num(sale.platform_fees))} />
             <Metric label="Shipping you paid" value={money(num(sale.shipping_cost))} />
-            <Metric label="Profit" value={money(num(sale.sale_price) + num(sale.shipping_charged) - num(sale.platform_fees) - num(sale.shipping_cost) - num(sale.other_costs) - cost)} />
+            <div>
+              <dt className="text-xs text-slate-500">Profit</dt>
+              <dd className="mt-1"><ProfitBadge size="md" value={num(sale.sale_price) + num(sale.shipping_charged) - num(sale.platform_fees) - num(sale.shipping_cost) - num(sale.other_costs) - cost} /></dd>
+            </div>
           </dl>
         </section>
       )}
@@ -97,10 +104,10 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
                       <form action={updateListing} className="mt-3 flex flex-wrap items-end gap-2">
                         <input type="hidden" name="id" value={l.id} />
                         <input type="hidden" name="item_id" value={item.id} />
-                        <label className="text-xs text-slate-400">Price
+                        <label className="flex flex-col text-xs text-slate-400">Price
                           <input name="list_price" type="number" min="0" step="0.01" defaultValue={num(l.list_price).toFixed(2)} className="field mt-1 w-28" />
                         </label>
-                        <label className="min-w-[10rem] flex-1 text-xs text-slate-400">Listing link
+                        <label className="flex min-w-[10rem] flex-1 flex-col text-xs text-slate-400">Listing link
                           <input name="listing_url" type="url" defaultValue={l.listing_url ?? ""} className="field mt-1" placeholder="https://" />
                         </label>
                         <select name="status" defaultValue={l.status} className="field w-28" aria-label="Listing status">
@@ -178,6 +185,15 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
               </ul>
             </section>
           )}
+
+          <section className="surface p-5">
+            <h2 className="text-base font-semibold text-white">Comments</h2>
+            <p className="mt-0.5 text-xs text-slate-500">Only your household sees these.</p>
+            <div className="mt-3 space-y-3">
+              <NotesList notes={comments} names={names} currentUser={ctx.userId} isAdmin={ctx.role === "admin"} showItem={false} allowPin={false} />
+              <NoteComposer itemId={item.id} placeholder="Add a comment on this item…" />
+            </div>
+          </section>
 
           <details className="surface p-5">
             <summary className="cursor-pointer text-base font-semibold text-white">Edit details</summary>
