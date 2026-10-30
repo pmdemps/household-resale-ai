@@ -1,13 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { challengeBody, isValidVerificationToken, parseAccountDeletionNotification } from "@/lib/ebay/account-deletion";
 import { appUrl } from "@/lib/ebay/config";
-import { createAnonClient } from "@/lib/supabase/service";
+import { createServiceClient } from "@/lib/supabase/service";
 
 export const dynamic = "force-dynamic";
 
 // eBay Marketplace Account Deletion endpoint (required before a production keyset is enabled).
 // Public: no session. Configure in the eBay developer portal with this URL and the same verification
 // token as EBAY_DELETION_VERIFICATION_TOKEN. See docs/ebay-setup.md.
+//
+// The GET challenge needs only the verification token. Recording a POST notice needs
+// SUPABASE_SERVICE_ROLE_KEY: record_ebay_account_deletion is SECURITY DEFINER and executable by the
+// service role only (never by the publishable key), so without the key the route answers 503 and eBay retries.
 
 function endpointUrl(): string {
   return `${appUrl()}/api/ebay/account-deletion`;
@@ -44,13 +48,24 @@ export async function POST(request: NextRequest) {
   // secret URL only eBay knows, and the fact that the only effect is revoking our copy of one user's tokens.
   const signature = request.headers.get("x-ebay-signature");
 
-  const db = createAnonClient();
-  if (!db) return NextResponse.json({ error: "Database not configured" }, { status: 503 });
+  const db = createServiceClient();
+  if (!db) {
+    return NextResponse.json(
+      { error: "SUPABASE_SERVICE_ROLE_KEY is not set; account-deletion notices cannot be recorded until it is (see docs/ebay-setup.md)." },
+      { status: 503 },
+    );
+  }
   const { username, userId } = notice.notification.data;
+  // The log must not keep the user's identifiers in plaintext: send the envelope only, never notification.data.
+  const { notificationId, eventDate, publishDate, publishAttemptCount } = notice.notification;
   const { error } = await db.rpc("record_ebay_account_deletion", {
     p_username: username ?? null,
     p_user_id: userId ?? null,
-    p_raw: { ...notice, receivedSignature: signature ? "present" : "absent" },
+    p_raw: {
+      metadata: notice.metadata,
+      notification: { notificationId, eventDate, publishDate, publishAttemptCount },
+      receivedSignature: signature ? "present" : "absent",
+    },
   });
   if (error) {
     console.error("[ebay/account-deletion] record failed:", error.message);

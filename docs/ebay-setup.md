@@ -39,7 +39,8 @@ eBay disables production keysets until you either subscribe to account-deletion 
    node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
    ```
    Put the same value in Vercel as `EBAY_DELETION_VERIFICATION_TOKEN` **and deploy before** you click Save — eBay immediately sends a challenge to the endpoint and expects the hash back.
-5. Click **Save** → it should show "verified". (Use **Send Test Notification** afterwards; the app records it in `ebay_account_deletion_log` and revokes any matching connection.)
+5. Also set `SUPABASE_SERVICE_ROLE_KEY` (step 5 below) before you go live. The challenge works without it, but recording a real deletion notice does not: the database function behind the endpoint can only be run by the service role (never by the publishable key), so without it the endpoint answers `503` and eBay keeps retrying.
+6. Click **Save** → it should show "verified". (Use **Send Test Notification** afterwards; the app records it in `ebay_account_deletion_log` — only SHA-256 hashes of the username and user id, never the plaintext — and revokes any matching connection, clearing its tokens, eBay username and user id.)
 
 ## 4. Business policies
 
@@ -58,7 +59,7 @@ Sandbox note: sandbox seller accounts often cannot opt in (a known eBay catch-22
 | `EBAY_DELETION_VERIFICATION_TOKEN` | the token from step 3 | **Secret** |
 | `TOKEN_ENCRYPTION_KEY` | `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"` — encrypts stored eBay tokens (AES-256-GCM). Keep a copy somewhere safe; losing it means everyone reconnects. | **Secret** |
 | `CRON_SECRET` | any long random string; the scheduler sends it as `Authorization: Bearer …` to `/api/ebay/sync` | **Secret** |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API Keys → `service_role` (secret). **Only** used by `/api/ebay/sync`; never in the browser. Without it that route answers 503 and the manual "Sync offers now" button still works. | **Secret** |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API Keys → `service_role` (secret). **Required** for the account-deletion endpoint (`/api/ebay/account-deletion`, step 3) and the scheduled offer sync (`/api/ebay/sync`); never in the browser. Without it both routes answer 503 (the account-deletion challenge still passes, and the manual "Sync offers now" button still works). | **Secret** |
 | `APP_URL` | `https://household-resale-ai.vercel.app` (no trailing slash) | Config |
 | `EBAY_DEFAULT_CATEGORY_ID` | optional; leaf category used when suggestions are unavailable (sandbox). Default `88433` (Everything Else). | Config |
 

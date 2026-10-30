@@ -1,6 +1,7 @@
 // Applies all Supabase migrations to an in-memory Postgres (PGlite) with a stubbed
 // auth schema, then checks row-level security and integrity rules. Run: npm run test:db
 import { PGlite } from "@electric-sql/pglite";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -19,7 +20,7 @@ await db.exec(`
     select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
   grant usage on schema auth to authenticated, anon;
   grant execute on function auth.uid() to authenticated, anon;
-  grant usage on schema public to authenticated, anon;
+  grant usage on schema public to authenticated, anon, service_role;
   insert into auth.users values ('${A}', 'a@example.com'), ('${B}', 'b@example.com');
 
   -- Minimal stand-in for Supabase Storage (same column names, RLS on objects) so the
@@ -200,14 +201,43 @@ await expectError(() => as(C, `insert into public.sync_state (household_id, key)
 await expectError(() => as(A, "select * from public.ebay_account_deletion_log"), "member cannot read the account deletion log");
 await expectError(() => asAnon("select * from public.ebay_account_deletion_log"), "anon cannot read the account deletion log");
 await expectError(() => asAnon("select * from public.marketplace_connections"), "anon cannot read connections");
-await asAnon("select public.record_ebay_account_deletion($1, $2, $3::jsonb)", ["testuser_a", "EBAY-USER-1", JSON.stringify({ metadata: { topic: "MARKETPLACE_ACCOUNT_DELETION" } })]);
-check(true, "anon can call record_ebay_account_deletion");
-const revoked = (await as(A, "select status, access_token_enc, refresh_token_enc from public.marketplace_connections where id = $1", [conn.id])).rows[0];
-check(revoked.status === "revoked" && revoked.access_token_enc === null && revoked.refresh_token_enc === null, "deletion notice revokes the connection and clears tokens");
+
+// record_ebay_account_deletion is SECURITY DEFINER: only the service role (the endpoint uses
+// SUPABASE_SERVICE_ROLE_KEY) may execute it. The publishable key (anon) and signed-in users may not.
+async function asService(sql, params = []) {
+  await db.exec(`reset role; select set_config('request.jwt.claim.sub', '', false); set role service_role;`);
+  try { return await db.query(sql, params); } finally { await db.exec("reset role;"); }
+}
+const notice = JSON.stringify({ metadata: { topic: "MARKETPLACE_ACCOUNT_DELETION" }, notification: { notificationId: "n-1", data: { username: "testuser_a", userId: "EBAY-USER-1" } } });
+await expectError(() => asAnon("select public.record_ebay_account_deletion($1, $2, $3::jsonb)", ["testuser_a", "EBAY-USER-1", notice]),
+  "anon CANNOT call record_ebay_account_deletion");
+await expectError(() => as(C, "select public.record_ebay_account_deletion($1, $2, $3::jsonb)", ["testuser_a", "EBAY-USER-1", notice]),
+  "authenticated user CANNOT call record_ebay_account_deletion");
+check((await as(A, "select status, external_user_id from public.marketplace_connections where id = $1", [conn.id])).rows[0].external_user_id === "EBAY-USER-1",
+  "rejected calls change nothing");
+await expectError(() => asService("select public.record_ebay_account_deletion($1, $2, $3::jsonb)", ["x".repeat(201), "EBAY-USER-1", "{}"]),
+  "oversized username is rejected");
+await expectError(() => asService("select public.record_ebay_account_deletion($1, $2, $3::jsonb)", ["testuser_a", "y".repeat(201), "{}"]),
+  "oversized user id is rejected");
+await expectError(() => asService("select public.record_ebay_account_deletion($1, $2, $3::jsonb)", ["testuser_a", "EBAY-USER-1", JSON.stringify({ pad: "z".repeat(17000) })]),
+  "oversized raw payload (> 16 KB) is rejected");
 await db.exec("reset role;");
-check((await db.query("select count(*)::int as n from public.ebay_account_deletion_log")).rows[0].n === 1, "deletion notice is logged (owner view)");
-await asAnon("select public.record_ebay_account_deletion($1, $2, $3::jsonb)", ["someone_else", "UNKNOWN-USER", "{}"]);
+check((await db.query("select count(*)::int as n from public.ebay_account_deletion_log")).rows[0].n === 0, "rejected calls are not logged");
+await asService("select public.record_ebay_account_deletion($1, $2, $3::jsonb)", ["testuser_a", "EBAY-USER-1", notice]);
+check(true, "service role can call record_ebay_account_deletion");
+const revoked = (await as(A, "select status, access_token_enc, refresh_token_enc, account_handle, external_user_id from public.marketplace_connections where id = $1", [conn.id])).rows[0];
+check(revoked.status === "revoked" && revoked.access_token_enc === null && revoked.refresh_token_enc === null, "deletion notice revokes the connection and clears tokens");
+check(revoked.account_handle === null && revoked.external_user_id === null, "deletion notice removes the eBay username and user id from the connection");
+await db.exec("reset role;");
+const logged = (await db.query("select username_hash, user_id_hash, raw::text as raw from public.ebay_account_deletion_log")).rows;
+check(logged.length === 1, "deletion notice is logged (owner view)");
+check(logged[0]?.user_id_hash === createHash("sha256").update("EBAY-USER-1").digest("hex") && logged[0]?.username_hash === createHash("sha256").update("testuser_a").digest("hex"),
+  "log keeps SHA-256 hashes of the username and user id");
+check(!/EBAY-USER-1|testuser_a/.test(logged[0]?.raw ?? "") && /n-1/.test(logged[0]?.raw ?? ""), "log never stores the plaintext identifiers (notification.data is stripped from raw)");
+await asService("select public.record_ebay_account_deletion($1, $2, $3::jsonb)", ["someone_else", "UNKNOWN-USER", "{}"]);
 check((await db.query("select count(*)::int as n from public.ebay_account_deletion_log")).rows[0].n === 2, "unknown users are still logged, nothing else changes");
+await asService("select public.record_ebay_account_deletion($1, $2, $3::jsonb)", [null, null, "{}"]);
+check((await db.query("select username_hash, user_id_hash from public.ebay_account_deletion_log order by received_at desc limit 1")).rows[0].user_id_hash === null, "missing identifiers are logged as null, not hashed");
 
 console.log(failures ? `${failures} FAILED` : "ALL PASSED");
 process.exit(failures ? 1 : 0);

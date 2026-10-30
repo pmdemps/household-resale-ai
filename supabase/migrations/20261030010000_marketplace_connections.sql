@@ -111,19 +111,42 @@ grant select, insert, update, delete on public.sync_state to authenticated;
 -- ---------------------------------------------------------------------------
 -- eBay Marketplace Account Deletion compliance
 -- The HTTP endpoint (app/api/ebay/account-deletion) verifies the notification, then calls
--- record_ebay_account_deletion as anon. The log has RLS on and NO policies: only the
--- service role / owner can read it.
+-- record_ebay_account_deletion with the SERVICE ROLE (SUPABASE_SERVICE_ROLE_KEY). The function is
+-- SECURITY DEFINER, so anon/authenticated must NOT be able to execute it: anyone holding the
+-- publishable key could otherwise revoke connections and fill the log. The log has RLS on and
+-- NO policies: only the service role / owner can read it.
+--
+-- eBay expects the user's data to be deleted, so the log keeps only SHA-256 hashes of the username
+-- and user id (enough to prove a notice was handled), never the plaintext, and the raw payload is
+-- stored without its notification.data block.
 -- ---------------------------------------------------------------------------
 create table if not exists public.ebay_account_deletion_log (
   id uuid primary key default gen_random_uuid(),
   received_at timestamptz not null default now(),
-  username text,
-  user_id text,
+  username_hash text,
+  user_id_hash text,
   raw jsonb not null default '{}'::jsonb
 );
 
+comment on table public.ebay_account_deletion_log is
+  'eBay MARKETPLACE_ACCOUNT_DELETION notices. username_hash / user_id_hash are hex SHA-256 of the values eBay sent; plaintext is never stored.';
+
 alter table public.ebay_account_deletion_log enable row level security;
-revoke all on public.ebay_account_deletion_log from anon, authenticated;
+revoke all on public.ebay_account_deletion_log from public, anon, authenticated;
+
+-- Hex SHA-256 of a text value (null stays null). Uses the built-in sha256(bytea) so it does not
+-- depend on which schema pgcrypto's digest() was installed in.
+create or replace function public.sha256_hex(p_value text)
+returns text
+language sql
+immutable
+strict
+set search_path = pg_catalog
+as $$
+  select encode(sha256(convert_to(p_value, 'UTF8')), 'hex');
+$$;
+
+revoke all on function public.sha256_hex(text) from public;
 
 create or replace function public.record_ebay_account_deletion(
   p_username text,
@@ -135,9 +158,25 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  v_raw jsonb := coalesce(p_raw, '{}'::jsonb);
 begin
-  insert into public.ebay_account_deletion_log (username, user_id, raw)
-  values (p_username, p_user_id, coalesce(p_raw, '{}'::jsonb));
+  -- Input caps: this runs as the table owner, so nothing oversized may reach the log.
+  if char_length(coalesce(p_username, '')) > 200 then
+    raise exception 'record_ebay_account_deletion: p_username longer than 200 characters' using errcode = 'string_data_right_truncation';
+  end if;
+  if char_length(coalesce(p_user_id, '')) > 200 then
+    raise exception 'record_ebay_account_deletion: p_user_id longer than 200 characters' using errcode = 'string_data_right_truncation';
+  end if;
+  if pg_column_size(v_raw) > 16384 then
+    raise exception 'record_ebay_account_deletion: p_raw larger than 16 KB' using errcode = 'program_limit_exceeded';
+  end if;
+
+  -- Never keep the user's identifiers in plaintext (the endpoint also omits them; this is the backstop).
+  v_raw := v_raw #- '{notification,data}';
+
+  insert into public.ebay_account_deletion_log (username_hash, user_id_hash, raw)
+  values (public.sha256_hex(nullif(p_username, '')), public.sha256_hex(nullif(p_user_id, '')), v_raw);
 
   if p_user_id is not null and char_length(p_user_id) > 0 then
     update public.marketplace_connections
@@ -146,11 +185,14 @@ begin
           refresh_token_enc = null,
           access_expires_at = null,
           refresh_expires_at = null,
+          account_handle = null,
+          external_user_id = null,
           last_error = 'eBay account deletion notice received'
       where platform = 'ebay' and external_user_id = p_user_id;
   end if;
 end;
 $$;
 
-revoke all on function public.record_ebay_account_deletion(text, text, jsonb) from public;
-grant execute on function public.record_ebay_account_deletion(text, text, jsonb) to anon, authenticated, service_role;
+-- Service role only. NOT anon/authenticated: the function is SECURITY DEFINER.
+revoke all on function public.record_ebay_account_deletion(text, text, jsonb) from public, anon, authenticated;
+grant execute on function public.record_ebay_account_deletion(text, text, jsonb) to service_role;
