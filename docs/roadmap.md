@@ -48,7 +48,8 @@ Dashboard, items with location/size/condition/floor price, listings per platform
 
 ### Stage 5 — Pricing & listing agents
 - Listing drafts from photos (title, description, category, size) → `listing_draft` tasks.
-- Price suggestions from eBay sold comps (Browse/Marketplace Insights where approved).
+- ✅ Market comps card on each item: **Check eBay prices** (Browse API, live Buy It Now listings) plus comps people/agents record from any site; shows lowest now, typical price, and a below/comparable/above verdict.
+- Price suggestions from eBay **sold** comps (Marketplace Insights, needs eBay approval).
 - Stale-listing rules: e.g. no views in 14 days → propose a 10% drop, never below floor.
 
 ### Stage 6 — Ops
