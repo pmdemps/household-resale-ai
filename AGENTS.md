@@ -43,7 +43,10 @@ These apply to any agent that reads or acts on marketplaces, email, or the house
 - `app/(app)/` signed-in pages: overview, inventory, item detail, offers, settings
 - `app/actions.ts` all writes (server actions); every write also logs to `activity_log`
 - `app/api/export` CSV exports
+- `app/api/ebay/*` eBay OAuth (connect/callback), account-deletion compliance endpoint, scheduled offer sync (`CRON_SECRET`)
+- `app/marketplace-actions.ts` human-triggered eBay writes (post, reprice, end, sync, disconnect); `lib/ebay/` pure, tested client (REST + Trading XML), `lib/crypto.ts` token encryption
+- `components/marketplace-connections.tsx` (Settings) and `components/post-to-ebay.tsx` (item page) are the eBay UI
 - `lib/fees.ts` fee rules per platform with `verifiedOn` dates; update the date and source when you re-check
 - `lib/platforms.ts` platform capabilities and posting rules
-- `supabase/migrations/` schema with row-level security per household
-- `docs/roadmap.md` staged plan and known integration limits
+- `supabase/migrations/` schema with row-level security per household; `marketplace_connections` holds encrypted tokens
+- `docs/roadmap.md` staged plan and known integration limits; `docs/ebay-setup.md` / `docs/etsy-setup.md` owner checklists
