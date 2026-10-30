@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getContext, requireHousehold } from "@/lib/household";
+import { isEbayConfigured } from "@/lib/ebay/config";
+import { respondToEbayOfferDecision } from "@/lib/ebay/respond";
 import { estimateFees } from "@/lib/fees";
 import { PLATFORMS, platformName } from "@/lib/platforms";
 import { CATEGORIES, ITEM_STATUSES, LISTING_STATUSES, num } from "@/lib/types";
@@ -234,7 +236,7 @@ export async function decideOffer(form: FormData) {
 
   const { data: offer, error: offerErr } = await ctx.supabase
     .from("offers")
-    .select("*, listings!inner(id, item_id, platform, status)")
+    .select("*, listings!inner(id, item_id, platform, status, external_id)")
     .eq("id", offerId)
     .eq("household_id", ctx.household.id)
     .single();
@@ -296,6 +298,22 @@ export async function decideOffer(form: FormData) {
   await ctx.supabase.from("agent_tasks").update({ status: "done", decided_by: ctx.userId, decided_at: now })
     .eq("offer_id", offerId).eq("status", "pending");
   await log(ctx, `offer_${decision}`, "offer", offerId, { amount: num(offer.amount), counter: patch.counter_amount ?? null });
+
+  // eBay integration: if this is a Best Offer we pulled from eBay (offers.external_id = BestOfferID) and the
+  // household has an active eBay connection, carry the human's decision to eBay (RespondToBestOffer).
+  // The local decision above is already recorded; a failure here is logged to activity_log and noted on the
+  // task (see lib/ebay/respond.ts) rather than thrown, so the page never errors because eBay was unreachable.
+  if (listing.platform === "ebay" && offer.external_id && isEbayConfigured()) {
+    await respondToEbayOfferDecision(ctx.supabase, {
+      householdId: ctx.household.id,
+      actorUser: ctx.userId,
+      offerId,
+      bestOfferId: String(offer.external_id),
+      ebayItemId: (offer.listings as { external_id?: string | null }).external_id ?? null,
+      decision,
+      counterAmount: (patch.counter_amount as number | undefined) ?? null,
+    });
+  }
   revalidatePath("/");
   revalidatePath("/offers");
   revalidatePath(`/inventory/${listing.item_id}`);
