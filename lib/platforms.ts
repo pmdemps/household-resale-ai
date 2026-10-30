@@ -24,7 +24,7 @@ export const PLATFORMS: PlatformInfo[] = [
     name: "eBay",
     hasAccount: true,
     integration: "official_api",
-    integrationNote: "Official APIs: Inventory (listings, price), Fulfillment (orders), Trading API GetBestOffers/RespondToBestOffer (buyer offers). Planned first live integration.",
+    integrationNote: "Integrated: connect in Settings, post from an item page (Inventory API), buyer offers pulled in (Trading GetBestOffers) and your accept/counter/decline sent back (RespondToBestOffer). Setup: docs/ebay-setup.md.",
     postingRules: ["Enable Best Offer with an auto-decline below the item's floor price."],
   },
   {

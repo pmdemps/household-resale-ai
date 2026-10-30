@@ -80,6 +80,9 @@ export type Listing = {
   list_price: number;
   listing_url: string | null;
   external_id: string | null;
+  /** eBay Inventory API offerId (the listing object, not a buyer offer). */
+  external_offer_id?: string | null;
+  sku?: string | null;
   listed_at: string | null;
   ended_at: string | null;
   created_at: string;
@@ -98,6 +101,27 @@ export type Offer = {
   expires_at: string | null;
   decided_at: string | null;
   note: string | null;
+  /** Marketplace id of the buyer offer (eBay BestOfferID). */
+  external_id?: string | null;
+};
+
+export type MarketplaceConnection = {
+  id: string;
+  household_id: string;
+  platform: "ebay" | "etsy";
+  environment: "sandbox" | "production";
+  account_handle: string | null;
+  external_user_id: string | null;
+  access_token_enc: string | null;
+  refresh_token_enc: string | null;
+  access_expires_at: string | null;
+  refresh_expires_at: string | null;
+  scopes: string | null;
+  status: "active" | "revoked" | "error";
+  last_error: string | null;
+  connected_by: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type Sale = {

@@ -41,6 +41,8 @@ Open [http://localhost:3000](http://localhost:3000).
 
 Copy `.env.example` to `.env.local` when integrations are introduced. Never commit real credentials.
 
+eBay is optional: without `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET`, `EBAY_RU_NAME` and `TOKEN_ENCRYPTION_KEY` the app runs normally and Settings shows "not set up yet". Full owner checklist (keys, RuName, account-deletion endpoint, `CRON_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, `APP_URL`, sandbox test plan) in [docs/ebay-setup.md](docs/ebay-setup.md).
+
 ## Security rules
 
 - Never commit API keys, tokens, passwords, real `.env` files, private financial exports, or transaction records.

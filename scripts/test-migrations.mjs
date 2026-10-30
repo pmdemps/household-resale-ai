@@ -11,13 +11,15 @@ const B = "22222222-2222-2222-2222-222222222222";
 
 await db.exec(`
   create role authenticated nologin;
+  create role anon nologin;
+  create role service_role nologin;
   create schema auth;
   create table auth.users (id uuid primary key, email text);
   create function auth.uid() returns uuid language sql stable as $$
     select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
-  grant usage on schema auth to authenticated;
-  grant execute on function auth.uid() to authenticated;
-  grant usage on schema public to authenticated;
+  grant usage on schema auth to authenticated, anon;
+  grant execute on function auth.uid() to authenticated, anon;
+  grant usage on schema public to authenticated, anon;
   insert into auth.users values ('${A}', 'a@example.com'), ('${B}', 'b@example.com');
 
   -- Minimal stand-in for Supabase Storage (same column names, RLS on objects) so the
@@ -151,6 +153,61 @@ check(otherHouseNote.rows.length === 1, "B writes in own household");
 check((await as(A, "select * from public.notes where household_id = $1", [hB])).rows.length === 0, "notes don't leak across households");
 await expectError(() => as(A, "insert into public.notes (household_id, item_id, body) values ($1, $2, 'x')", [hB, item]), "cannot attach note to another household's item");
 check((await as(B, "delete from public.notes where id = $1 returning id", [note.id])).rows.length === 1, "author deletes own note");
+
+// --- marketplace connections, external ids, sync_state, eBay account deletion ---
+// C is a fresh user with no household membership at all.
+const C = "33333333-3333-3333-3333-333333333333";
+await db.exec(`insert into auth.users values ('${C}', 'c@example.com')`);
+async function asAnon(sql, params = []) {
+  await db.exec(`reset role; select set_config('request.jwt.claim.sub', '', false); set role anon;`);
+  try { return await db.query(sql, params); } finally { await db.exec("reset role;"); }
+}
+
+const conn = (await as(A, `insert into public.marketplace_connections
+  (household_id, platform, environment, account_handle, external_user_id, access_token_enc, refresh_token_enc, scopes, connected_by)
+  values ($1, 'ebay', 'sandbox', 'testuser_a', 'EBAY-USER-1', 'v1:ciphertext', 'v1:ciphertext', 'sell.inventory', $2) returning id, status`, [hA, A])).rows[0];
+check(conn.status === "active", "connection defaults to active");
+check((await as(B, "select * from public.marketplace_connections")).rows.length === 1, "co-member sees the household connection");
+check((await as(C, "select * from public.marketplace_connections")).rows.length === 0, "non-member cannot read connections");
+await expectError(() => as(C, `insert into public.marketplace_connections (household_id, platform, connected_by) values ($1, 'etsy', $2)`, [hA, C]),
+  "non-member cannot add a connection to another household");
+await expectError(() => as(A, `insert into public.marketplace_connections (household_id, platform, connected_by) values ($1, 'ebay', $2)`, [hA, A]),
+  "only one connection per platform per household");
+await expectError(() => as(A, `insert into public.marketplace_connections (household_id, platform, connected_by) values ($1, 'vinted', $2)`, [hA, A]),
+  "connections are limited to platforms with an official API");
+check((await as(B, "update public.marketplace_connections set status = 'error', last_error = 'expired' where id = $1 returning id", [conn.id])).rows.length === 1, "member can update a connection");
+check((await as(B, "delete from public.marketplace_connections where id = $1 returning id", [conn.id])).rows.length === 0, "member (non-admin) cannot delete a connection");
+check((await as(C, "update public.marketplace_connections set status = 'revoked' returning id")).rows.length === 0, "non-member cannot update connections");
+const connTs = (await as(A, "select created_at, updated_at from public.marketplace_connections where id = $1", [conn.id])).rows[0];
+check(new Date(connTs.updated_at) >= new Date(connTs.created_at), "connection updated_at trigger runs");
+
+const ebayListing = (await as(A, `select id from public.listings where item_id = $1 and platform = 'ebay'`, [item])).rows[0].id;
+await as(A, `update public.listings set external_id = '110000001', external_offer_id = 'OFFER-1', sku = $2 where id = $1`, [ebayListing, item]);
+check((await as(B, "select sku, external_offer_id from public.listings where id = $1", [ebayListing])).rows[0].external_offer_id === "OFFER-1", "listing external ids are stored");
+await as(A, `insert into public.offers (household_id, listing_id, amount, source, external_id, buyer_handle) values ($1, $2, 4.5, 'api', 'BO-1', 'buyer1')`, [hA, ebayListing]);
+await expectError(() => as(A, `insert into public.offers (household_id, listing_id, amount, source, external_id) values ($1, $2, 4.5, 'api', 'BO-1')`, [hA, ebayListing]),
+  "same eBay BestOfferID cannot be recorded twice on a listing");
+await as(A, `insert into public.offers (household_id, listing_id, amount, source) values ($1, $2, 4.0, 'manual')`, [hA, ebayListing]);
+await as(A, `insert into public.offers (household_id, listing_id, amount, source) values ($1, $2, 4.25, 'manual')`, [hA, ebayListing]);
+check(true, "offers without an external id are not deduped");
+
+await as(A, `insert into public.sync_state (household_id, key, value) values ($1, 'ebay_offers', '{"last_poll":"2026-10-30T00:00:00Z"}')
+  on conflict (household_id, key) do update set value = excluded.value`, [hA]);
+check((await as(B, "select value from public.sync_state where household_id = $1 and key = 'ebay_offers'", [hA])).rows.length === 1, "co-member reads sync state");
+check((await as(C, "select * from public.sync_state")).rows.length === 0, "non-member cannot read sync state");
+await expectError(() => as(C, `insert into public.sync_state (household_id, key) values ($1, 'x')`, [hA]), "non-member cannot write sync state");
+
+await expectError(() => as(A, "select * from public.ebay_account_deletion_log"), "member cannot read the account deletion log");
+await expectError(() => asAnon("select * from public.ebay_account_deletion_log"), "anon cannot read the account deletion log");
+await expectError(() => asAnon("select * from public.marketplace_connections"), "anon cannot read connections");
+await asAnon("select public.record_ebay_account_deletion($1, $2, $3::jsonb)", ["testuser_a", "EBAY-USER-1", JSON.stringify({ metadata: { topic: "MARKETPLACE_ACCOUNT_DELETION" } })]);
+check(true, "anon can call record_ebay_account_deletion");
+const revoked = (await as(A, "select status, access_token_enc, refresh_token_enc from public.marketplace_connections where id = $1", [conn.id])).rows[0];
+check(revoked.status === "revoked" && revoked.access_token_enc === null && revoked.refresh_token_enc === null, "deletion notice revokes the connection and clears tokens");
+await db.exec("reset role;");
+check((await db.query("select count(*)::int as n from public.ebay_account_deletion_log")).rows[0].n === 1, "deletion notice is logged (owner view)");
+await asAnon("select public.record_ebay_account_deletion($1, $2, $3::jsonb)", ["someone_else", "UNKNOWN-USER", "{}"]);
+check((await db.query("select count(*)::int as n from public.ebay_account_deletion_log")).rows[0].n === 2, "unknown users are still logged, nothing else changes");
 
 console.log(failures ? `${failures} FAILED` : "ALL PASSED");
 process.exit(failures ? 1 : 0);
