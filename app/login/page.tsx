@@ -28,10 +28,15 @@ export default function LoginPage() {
           options: { emailRedirectTo: window.location.origin + "/auth/callback" },
         });
         if (error) throw error;
-        setMessage("Account request submitted. Check your email for a confirmation link if email confirmation is enabled.");
+        setMessage("Account made. If a confirmation email shows up, tap the link in it, then come back and sign in.");
       }
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to complete sign-in. Check your Supabase configuration.");
+      const text = error instanceof Error ? error.message : "";
+      setMessage(
+        /invalid login credentials/i.test(text) ? "Nope. Wrong email or password."
+          : /already registered/i.test(text) ? "That email already has an account. Sign in instead."
+          : text || "Couldn't sign you in. Something's screwed up, try again.",
+      );
     } finally {
       setBusy(false);
     }
@@ -40,9 +45,9 @@ export default function LoginPage() {
   return <main className="flex min-h-screen items-center justify-center px-4 py-10">
     <section className="surface w-full max-w-md p-7 sm:p-8">
       <Link href="/" className="text-sm text-link hover:underline">← Resale HQ</Link>
-      <p className="eyebrow mt-7">Household Resale AI</p>
-      <h1 className="mt-2 text-2xl font-semibold text-white">{mode === "signin" ? "Welcome back" : "Create your account"}</h1>
-      <p className="mt-2 text-sm leading-6 text-slate-400">Sign in to your workspace. Your inventory will be protected by account-level database policies.</p>
+      <p className="eyebrow mt-7">Members only</p>
+      <h1 className="mt-2 text-2xl font-semibold text-white">{mode === "signin" ? "Well, look who's back" : "Make an account"}</h1>
+      <p className="mt-2 text-sm leading-6 text-slate-400">{mode === "signin" ? "Sign in. Let's go sell some shit." : "Takes a minute. Then whoever runs the house adds you from their Settings."}</p>
       <div className="mt-6 grid grid-cols-2 rounded-xl border border-line p-1">
         <button type="button" onClick={() => { setMode("signin"); setMessage(""); }} className={"rounded-lg py-2 text-sm " + (mode === "signin" ? "bg-white/10 text-white" : "text-slate-400")}>Sign in</button>
         <button type="button" onClick={() => { setMode("signup"); setMessage(""); }} className={"rounded-lg py-2 text-sm " + (mode === "signup" ? "bg-white/10 text-white" : "text-slate-400")}>Create account</button>
@@ -50,10 +55,9 @@ export default function LoginPage() {
       <form onSubmit={submit} className="mt-5 space-y-4">
         <div><label htmlFor="email" className="mb-1.5 block text-xs text-slate-300">Email</label><input id="email" type="email" autoComplete="email" required value={email} onChange={e => setEmail(e.target.value)} className="field" placeholder="you@example.com" /></div>
         <div><label htmlFor="password" className="mb-1.5 block text-xs text-slate-300">Password</label><input id="password" type="password" autoComplete={mode === "signin" ? "current-password" : "new-password"} minLength={8} required value={password} onChange={e => setPassword(e.target.value)} className="field" placeholder="At least 8 characters" /></div>
-        <button disabled={busy} className="btn-primary w-full disabled:cursor-wait disabled:opacity-60" type="submit">{busy ? "Working..." : mode === "signin" ? "Sign in" : "Create account"}</button>
+        <button disabled={busy} className="btn-primary w-full disabled:cursor-wait disabled:opacity-60" type="submit">{busy ? "Hang on…" : mode === "signin" ? "Sign in" : "Create account"}</button>
       </form>
       {message && <p role="status" className="mt-4 rounded-xl border border-line bg-white/[0.03] p-3 text-sm leading-5 text-slate-300">{message}</p>}
-      <p className="mt-5 text-xs leading-5 text-slate-500">New accounts may require email confirmation. Configure the site URL and redirect URL in Supabase Auth settings before production use.</p>
     </section>
   </main>;
 }

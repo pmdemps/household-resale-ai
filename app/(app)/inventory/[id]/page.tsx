@@ -43,11 +43,12 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
   const livePlatforms = new Set(live.map(l => l.platform));
   const cost = num(item.purchase_cost);
   const isSold = item.status === "sold";
+  const saleProfit = sale ? num(sale.sale_price) + num(sale.shipping_charged) - num(sale.platform_fees) - num(sale.shipping_cost) - num(sale.other_costs) - cost : 0;
 
   return (
     <div className="space-y-6">
       <header>
-        <Link href="/inventory" className="text-sm text-link hover:underline">← Stuff</Link>
+        <Link href="/inventory" className="text-sm text-link hover:underline">← My Shit</Link>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-2xl font-semibold tracking-tight text-white">{item.name}</h1>
@@ -62,7 +63,7 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
           </div>
           <div className="text-right text-sm">
             <p className="text-slate-400">Asking <span className="font-semibold text-white">{money(num(item.target_price))}</span></p>
-            {item.floor_price !== null && <p className="text-slate-500">Floor {money(num(item.floor_price))}</p>}
+            {item.floor_price !== null && <p className="text-slate-500">Rock bottom {money(num(item.floor_price))}</p>}
           </div>
         </div>
       </header>
@@ -71,15 +72,15 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
 
       {sale && (
         <section className="surface p-5">
-          <h2 className="text-base font-semibold text-white">Sold on {platformName(sale.platform)}</h2>
+          <h2 className="text-base font-semibold text-white">Sold on {platformName(sale.platform)}{saleProfit < 0 ? ". At least it's gone." : ", hell yeah"}</h2>
           <p className="mt-1 text-xs text-slate-500">{new Date(sale.sold_at).toLocaleDateString()}</p>
           <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
             <Metric label="Sale price" value={money(num(sale.sale_price))} />
             <Metric label="Fees" value={money(num(sale.platform_fees))} />
-            <Metric label="Shipping you paid" value={money(num(sale.shipping_cost))} />
+            <Metric label="Shipping we paid" value={money(num(sale.shipping_cost))} />
             <div>
-              <dt className="text-xs text-slate-500">Profit after what you paid</dt>
-              <dd className="mt-1"><ProfitBadge size="md" value={num(sale.sale_price) + num(sale.shipping_charged) - num(sale.platform_fees) - num(sale.shipping_cost) - num(sale.other_costs) - cost} /></dd>
+              <dt className="text-xs text-slate-500">Profit after what we paid</dt>
+              <dd className="mt-1"><ProfitBadge size="md" value={saleProfit} /></dd>
             </div>
           </dl>
         </section>
@@ -87,7 +88,7 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
 
       {pending.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-white">Offers waiting on you</h2>
+          <h2 className="text-lg font-semibold text-white">Somebody wants this</h2>
           {pending.map(o => <OfferCard key={o.id} offer={o} />)}
         </section>
       )}
@@ -98,7 +99,7 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
 
           <section className="surface p-5">
             <h2 className="text-base font-semibold text-white">Listed on</h2>
-            {listings.length === 0 && <p className="mt-2 text-sm text-slate-500">Not listed anywhere yet.</p>}
+            {listings.length === 0 && <p className="mt-2 text-sm text-slate-500">Not listed anywhere yet. It&apos;s just sitting there.</p>}
             <ul className="mt-3 space-y-3">
               {listings.map(l => (
                 <li key={l.id} className="rounded-xl border border-line p-4">
@@ -130,7 +131,7 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
                         <summary className="cursor-pointer text-xs text-link">Got an offer or a sale?</summary>
                         <div className="mt-3 grid gap-3 sm:grid-cols-2">
                           <form action={recordOffer} className="space-y-2 rounded-lg border border-line p-3">
-                            <p className="text-xs font-medium text-slate-300">Record an offer</p>
+                            <p className="text-xs font-medium text-slate-300">Somebody made an offer</p>
                             <input type="hidden" name="listing_id" value={l.id} />
                             <input type="hidden" name="item_id" value={item.id} />
                             <input name="amount" type="number" min="0" step="0.01" required className="field" placeholder="Offer $" inputMode="decimal" />
@@ -138,7 +139,7 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
                             <button className="btn-secondary w-full">Add offer</button>
                           </form>
                           <form action={recordSale} className="space-y-2 rounded-lg border border-line p-3">
-                            <p className="text-xs font-medium text-slate-300">Sold at a price</p>
+                            <p className="text-xs font-medium text-slate-300">We sold it!</p>
                             <input type="hidden" name="listing_id" value={l.id} />
                             <input name="sale_price" type="number" min="0" step="0.01" required className="field" defaultValue={num(l.list_price).toFixed(2)} inputMode="decimal" aria-label="Sale price" />
                             <input name="shipping_cost" type="number" min="0" step="0.01" className="field" placeholder="Label you paid $ (optional)" inputMode="decimal" />
@@ -199,27 +200,27 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
 
           <section className="surface p-5">
             <h2 className="text-base font-semibold text-white">Comments</h2>
-            <p className="mt-0.5 text-xs text-slate-500">Only your household sees these.</p>
+            <p className="mt-0.5 text-xs text-slate-500">Just us. Buyers never see these, so talk all the shit you want.</p>
             <div className="mt-3 space-y-3">
               <NotesList notes={comments} names={names} currentUser={ctx.userId} isAdmin={ctx.role === "admin"} showItem={false} allowPin={false} />
-              <NoteComposer itemId={item.id} placeholder="Add a comment on this item…" />
+              <NoteComposer itemId={item.id} placeholder="Say something about this thing…" />
             </div>
           </section>
 
           <details className="surface p-5">
-            <summary className="cursor-pointer text-base font-semibold text-white">Edit details</summary>
+            <summary className="cursor-pointer text-base font-semibold text-white">Fix the details</summary>
             <div className="mt-4"><ItemForm action={updateItem} item={item} /></div>
           </details>
         </div>
 
         <aside className="space-y-4">
           <section className="surface p-5">
-            <h2 className="text-base font-semibold text-white">Where you&apos;d net the most</h2>
+            <h2 className="text-base font-semibold text-white">Where we&apos;d make the most</h2>
             <div className="mt-3"><FeeCalculator defaultPrice={num(item.target_price)} itemCost={cost} category={item.category} /></div>
           </section>
           {live.some(l => platformById(l.platform).postingRules.length > 0) && (
             <section className="surface p-5 text-xs leading-5 text-slate-400">
-              <p className="font-medium text-slate-200">Rules for this item&apos;s platforms</p>
+              <p className="font-medium text-slate-200">Rules so we don&apos;t get banned</p>
               <ul className="mt-2 list-disc space-y-1 pl-4">
                 {live.flatMap(l => platformById(l.platform).postingRules.map(r => <li key={l.id + r}>{r}</li>))}
               </ul>

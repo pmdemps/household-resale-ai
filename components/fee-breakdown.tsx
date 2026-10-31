@@ -9,19 +9,19 @@ export function FeeBreakdown({ estimate, itemCost, compact = false }: { estimate
       <dl className="space-y-1.5 text-sm">
         <Row label={`Sale on ${platformName(estimate.platform)}`} value={money(estimate.salePrice)} />
         {estimate.lines.map(l => <Row key={l.label} label={l.label} value={"− " + money(l.amount)} muted />)}
-        {estimate.sellerShippingCost > 0 && <Row label="Shipping label you pay" value={"− " + money(estimate.sellerShippingCost)} muted />}
+        {estimate.sellerShippingCost > 0 && <Row label="Shipping label we pay" value={"− " + money(estimate.sellerShippingCost)} muted />}
         <div className="my-2 border-t border-line" />
-        <Row label="You get after fees" value={money(estimate.payout)} strong tone={estimate.payout < 0 ? "bad" : itemCost ? undefined : estimate.payout > 0 ? "good" : undefined} />
+        <Row label="What we actually pocket" value={money(estimate.payout)} strong tone={estimate.payout < 0 ? "bad" : itemCost ? undefined : estimate.payout > 0 ? "good" : undefined} />
         {itemCost !== undefined && itemCost > 0 && (
           <>
-            <Row label="What you paid for it" value={"− " + money(itemCost)} muted />
+            <Row label="What we paid for this crap" value={"− " + money(itemCost)} muted />
             <Row label="Profit" value={money(estimate.profit)} strong tone={estimate.profit >= 0 ? "good" : "bad"} />
           </>
         )}
       </dl>
       <p className="mt-3 text-[11px] leading-4 text-slate-500">
-        Estimate. {unverified ? "Fee rule not yet verified. " : estimate.rule.verifiedOn.includes("third-party") ? `Fees from third-party sources (${estimate.rule.verifiedOn.slice(0, 10)}). ` : `Fees checked ${estimate.rule.verifiedOn}. `}
-        Check the platform&apos;s payout screen before you accept.
+        Rough math. {unverified ? "Fee rule not yet verified. " : estimate.rule.verifiedOn.includes("third-party") ? `Fees from third-party sources (${estimate.rule.verifiedOn.slice(0, 10)}). ` : `Fees checked ${estimate.rule.verifiedOn}. `}
+        Check the payout screen before you say yes. Fees are sneaky little shits.
       </p>
     </div>
   );

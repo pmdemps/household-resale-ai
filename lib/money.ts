@@ -117,10 +117,10 @@ const whole = (n: number) => {
 
 /** "Up $23 this month", "Down $4 this month", "No sales yet this month", "Broke even this month". */
 export function profitSentence(point: Pick<MonthPoint, "profit" | "sold">): string {
-  if (point.sold === 0) return "No sales yet this month";
-  if (point.profit > 0.004) return `Up ${whole(point.profit)} this month`;
-  if (point.profit < -0.004) return `Down ${whole(point.profit)} this month`;
-  return "Broke even this month";
+  if (point.sold === 0) return "Nothing sold this month. Yet.";
+  if (point.profit > 0.004) return `Up ${whole(point.profit)} this month. Hell yeah.`;
+  if (point.profit < -0.004) return `Down ${whole(point.profit)} this month. Well, shit.`;
+  return "Broke even this month. Meh.";
 }
 
 /** "+$23.45" / "−$4.00" / "$0.00" with a real minus sign, for headline numbers. */

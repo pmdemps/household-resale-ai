@@ -44,7 +44,7 @@ export function ItemPhotos({ householdId, itemId, itemName, photos, justCreated 
         <div className="mt-4 rounded-xl border border-dashed border-line px-4 py-7 text-center">
           <ImageIcon size={26} className="mx-auto text-slate-500" aria-hidden />
           <p className="mt-2 text-sm text-slate-400">
-            {justCreated ? "Saved. Now add photos — they're what sells it." : "No photos yet. Add a couple — listings with photos sell faster."}
+            {justCreated ? "Saved. Now add photos. Nobody buys shit they can't see." : "No photos yet. Nobody buys shit they can't see."}
           </p>
           <p className="mt-1 text-xs text-slate-500">Straight from your phone is fine: photos are shrunk to 2000px before they upload, and the first one becomes the cover.</p>
         </div>

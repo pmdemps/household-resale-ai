@@ -38,6 +38,31 @@ These apply to any agent that reads or acts on marketplaces, email, or the house
 | eBay | Official APIs only. Best Offer on, auto-decline below floor price. |
 | Poshmark, Mercari | No public API; terms prohibit automation. Email tracking plus manual action only. |
 
+## App voice
+
+The two people using this app asked for it to talk the way they do: casual, funny, and cussing. Write new screen text in that voice.
+
+- Profanity is welcome: shit, crap, damn, hell, ass. Keep the strongest words for big moments, and don't put a joke on every line.
+- Say "we" and "our" ("what we paid"). It's a shared household, so avoid "you" for money and decisions.
+- The words in this voice:
+
+| Instead of | Say |
+|---|---|
+| Stuff / Inventory | My Shit |
+| Add item | Add shit |
+| Not listed yet | Collecting dust |
+| Accept / Decline | Take it / Hell no |
+
+- Funny never beats clear. Buttons, field labels, prices and warnings must still say plainly what they do. Rules about floor prices, double-selling and getting banned stay just as clear.
+- Never mean toward either person, and no slurs or sexual jokes.
+- **Anything outside the app stays clean and professional.** No cussing in:
+  - listing titles and descriptions, or the `conditionDescription` sent to eBay
+  - buyer messages or `SellerResponse`
+  - CSV exports and column names
+  - stored values (`CATEGORIES`, `CONDITIONS`, status enums)
+  - GitHub issues and PRs
+  Only the display labels in `lib/types.ts` change.
+
 ## Project map
 
 - `app/(app)/` signed-in pages: overview, inventory, item detail, offers, settings

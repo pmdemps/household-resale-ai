@@ -22,7 +22,7 @@ export default async function MoneyPage() {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Money</h1>
-          <p className="mt-1 text-sm text-slate-400">Profit is what&apos;s left after fees, shipping and what you paid for the thing.</p>
+          <p className="mt-1 text-sm text-slate-400">Profit is what&apos;s left after fees, shipping and whatever we paid for the damn thing.</p>
         </div>
         <a href="/api/export?type=sales" className="btn-secondary"><Download size={15} /> Sales CSV</a>
       </header>
@@ -60,7 +60,7 @@ export default async function MoneyPage() {
             </details>
           </>
         ) : (
-          <p className="mt-3 text-sm text-slate-500">The chart fills in as things sell. When an item sells, open it and use &quot;Got an offer or a sale?&quot;.</p>
+          <p className="mt-3 text-sm text-slate-500">Empty because we haven&apos;t sold shit yet. When something sells, open it and hit &quot;Got an offer or a sale?&quot;.</p>
         )}
       </section>
 
@@ -68,7 +68,7 @@ export default async function MoneyPage() {
         <section className="surface p-4 sm:p-5">
           <h2 className="text-base font-semibold text-white">By platform</h2>
           {data.byPlatform.length === 0 ? (
-            <p className="mt-3 text-sm text-slate-500">Nothing listed yet.</p>
+            <p className="mt-3 text-sm text-slate-500">Nothing listed yet. Get to it.</p>
           ) : (
             <table className="mt-3 w-full text-sm">
               <thead>
@@ -99,7 +99,7 @@ export default async function MoneyPage() {
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-accent text-on-accent"><Trophy size={22} /></span>
           <span className="min-w-0 flex-1">
             <span className="block text-base font-semibold text-white">What sells best</span>
-            <span className="block text-sm text-slate-400">Brands, categories and platforms that make the most, and what isn&apos;t moving.</span>
+            <span className="block text-sm text-slate-400">What makes us the most money, and the crap nobody wants.</span>
           </span>
           <ArrowRight size={18} className="shrink-0 text-link" />
         </Link>

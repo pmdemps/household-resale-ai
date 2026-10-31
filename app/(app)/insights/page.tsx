@@ -29,7 +29,7 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
       <header>
         <Link href="/money" className="text-sm text-link hover:underline">← Money</Link>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">What sells best</h1>
-        <p className="mt-1 text-sm text-slate-400">What sells, how fast, and what actually makes money after fees, shipping and what you paid.</p>
+        <p className="mt-1 text-sm text-slate-400">What sells, how fast, and what actually makes money after fees, shipping and what we paid.</p>
       </header>
 
       <section className="grid grid-cols-3 gap-3">
@@ -41,14 +41,14 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
       {t.sold < MIN_SALES && (
         <p className="flex gap-2 rounded-xl border border-line bg-white/[0.03] px-4 py-3 text-sm text-slate-300">
           <Lightbulb size={17} className="mt-0.5 shrink-0 text-warn" />
-          Patterns get real after a handful of sales. Rankings below are early guesses until a group has {MIN_SALES}+ sales.
+          This won&apos;t mean a damn thing until we sell a few more. Rankings are guesses until a group has {MIN_SALES}+ sales.
         </p>
       )}
 
       {best && (
         <p className="flex gap-2 rounded-xl border border-good/30 bg-good/[0.08] px-4 py-3 text-sm text-slate-200">
           <Trophy size={17} className="mt-0.5 shrink-0 text-good" />
-          <span><span className="font-semibold text-good">{best.label}</span> is your best {by === "platform" ? "platform" : by === "category" ? "category" : "brand"} so far: {best.sold} sold, {money(best.avgProfit)} profit each on average{best.medianDaysToSell !== null ? `, usually gone in ${best.medianDaysToSell} days` : ""}.</span>
+          <span><span className="font-semibold text-good">{best.label}</span> is our best {by === "platform" ? "platform" : by === "category" ? "category" : "brand"} so far: {best.sold} sold, {money(best.avgProfit)} profit each on average{best.medianDaysToSell !== null ? `, usually gone in ${best.medianDaysToSell} days` : ""}.</span>
         </p>
       )}
 
@@ -63,7 +63,7 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
 
       <section className="surface p-5">
         {rows.length === 0 ? (
-          <p className="text-sm text-slate-500">Nothing to compare yet. Add items{by === "brand" ? " with a brand" : ""} and list them.</p>
+          <p className="text-sm text-slate-500">Nothing to compare yet. Add some shit{by === "brand" ? " with a brand" : ""} and list it.</p>
         ) : (
           <GroupBars rows={rows} />
         )}
@@ -72,7 +72,7 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
 
       {top.length > 0 && (
         <section className="surface p-5">
-          <h2 className="text-base font-semibold text-white">Most profitable sales</h2>
+          <h2 className="text-base font-semibold text-white">Best damn sales</h2>
           <ul className="mt-3 divide-y divide-line">
             {top.map(i => (
               <li key={i.id}>
@@ -91,8 +91,8 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
 
       {slow.length > 0 && (
         <section className="surface p-5">
-          <h2 className="flex items-center gap-2 text-base font-semibold text-white"><Clock size={17} className="text-warn" /> Not moving (30+ days listed)</h2>
-          <p className="mt-1 text-xs text-slate-500">Worth a price drop, a better photo, or a different platform. Never below your floor.</p>
+          <h2 className="flex items-center gap-2 text-base font-semibold text-white"><Clock size={17} className="text-warn" /> Shit nobody wants (30+ days listed)</h2>
+          <p className="mt-1 text-xs text-slate-500">Try a price drop, a better photo, or another platform. Never below the floor though.</p>
           <ul className="mt-3 divide-y divide-line">
             {slow.slice(0, 10).map(({ item, days }) => (
               <li key={item.id}>
@@ -132,7 +132,7 @@ function GroupBars({ rows }: { rows: GroupStat[] }) {
               <div className={"h-2 rounded-full " + (tone === "bad" ? "bg-bad" : "bg-good")} style={{ width: `${width}%` }} />
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              {r.listed === 0 ? "Not listed yet" : <>{r.sold} of {r.listed} listed sold ({Math.round(r.sellThrough * 100)}%)</>}
+              {r.listed === 0 ? "Collecting dust" : <>{r.sold} of {r.listed} listed sold ({Math.round(r.sellThrough * 100)}%)</>}
               {r.sold > 0 && <> · {money(r.avgProfit)} each</>}
               {r.medianDaysToSell !== null && <> · ~{r.medianDaysToSell} day{r.medianDaysToSell === 1 ? "" : "s"} to sell</>}
             </p>

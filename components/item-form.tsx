@@ -11,7 +11,7 @@ export function ItemForm({ action, item }: Props) {
   return (
     <form action={action} className="space-y-5">
       {item && <input type="hidden" name="id" value={item.id} />}
-      <Field label="What is it?" htmlFor="name">
+      <Field label="What the hell is it?" htmlFor="name">
         <input id="name" name="name" className="field" required maxLength={200} defaultValue={item?.name} placeholder="Boys' Nike Air Max sneakers" autoFocus={!editing} />
       </Field>
 
@@ -35,7 +35,7 @@ export function ItemForm({ action, item }: Props) {
             {CONDITIONS.map(c => <option key={c}>{c}</option>)}
           </select>
         </Field>
-        <Field label="Where is it?" htmlFor="storage_location">
+        <Field label="Where's it hiding?" htmlFor="storage_location">
           <input id="storage_location" name="storage_location" className="field" maxLength={120} defaultValue={item?.storage_location ?? ""} placeholder="Garage bin 2" />
         </Field>
         <Field label="Weight (oz)" htmlFor="weight_oz" hint="For shipping">
@@ -47,10 +47,10 @@ export function ItemForm({ action, item }: Props) {
         <Field label="Asking price ($)" htmlFor="target_price">
           <input id="target_price" name="target_price" type="number" min="0" step="0.01" inputMode="decimal" className="field" defaultValue={item ? item.target_price : ""} placeholder="0.00" />
         </Field>
-        <Field label="Lowest you'd take ($)" htmlFor="floor_price" hint="Agents never go below this">
+        <Field label="Lowest we'd take ($)" htmlFor="floor_price" hint="Nobody goes below this. Ever.">
           <input id="floor_price" name="floor_price" type="number" min="0" step="0.01" inputMode="decimal" className="field" defaultValue={item?.floor_price ?? ""} placeholder="0.00" />
         </Field>
-        <Field label="What you paid ($)" htmlFor="purchase_cost" hint="0 if you don't know">
+        <Field label="What we paid ($)" htmlFor="purchase_cost" hint="0 if no clue">
           <input id="purchase_cost" name="purchase_cost" type="number" min="0" step="0.01" inputMode="decimal" className="field" defaultValue={item ? item.purchase_cost : ""} placeholder="0.00" />
         </Field>
       </div>
@@ -63,20 +63,20 @@ export function ItemForm({ action, item }: Props) {
         </Field>
       )}
 
-      <Field label="Notes" htmlFor="notes" hint="Flaws, details, anything a buyer should know">
+      <Field label="Notes" htmlFor="notes" hint="Stains, scuffs, quirks a buyer should know">
         <textarea id="notes" name="notes" rows={3} className="field" maxLength={4000} defaultValue={item?.notes ?? ""} />
       </Field>
 
       {!editing && (
         <p className="text-[11px] text-slate-500">
-          Photos come next: after you save, the item page opens on <span className="text-slate-400">Add photos</span> (up to {MAX_PHOTOS_PER_ITEM}; phone photos upload straight from the browser).
+          Photos come next. After you save, hit <span className="text-slate-400">Add photos</span> (up to {MAX_PHOTOS_PER_ITEM}, straight from your phone is fine).
         </p>
       )}
       <input type="hidden" name="source" value={item?.source ?? "Household"} />
 
       <div className="flex flex-wrap justify-end gap-2 border-t border-line pt-4">
-        {!editing && <button name="another" value="1" className="btn-secondary">Save &amp; add another</button>}
-        <button className="btn-primary">{editing ? "Save changes" : "Save item"}</button>
+        {!editing && <button name="another" value="1" className="btn-secondary">Save &amp; add more shit</button>}
+        <button className="btn-primary">{editing ? "Save changes" : "Save it"}</button>
       </div>
     </form>
   );
