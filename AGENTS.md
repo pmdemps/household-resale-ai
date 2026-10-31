@@ -23,6 +23,7 @@ Humans: this is also the contract for how agents are allowed to behave.
 These apply to any agent that reads or acts on marketplaces, email, or the household database.
 
 - **Propose, don't act.** Anything with an outside effect (listing, price change, accepting/countering/declining an offer, messaging a buyer, delisting) is written to `agent_tasks` as `pending`. A household member approves it in the app. Only then may an agent carry it out, and it records the result in `activity_log` with `actor_agent` set.
+- **A member's assistant speaks for the member, not for itself.** A personal assistant holding an `assistant_keys` key (Muse, ChatGPT) may record a decision only after the member said it; the API attributes it to that member with `actor_agent` set. It still may not touch marketplace sites or apps, and it cannot go below the floor price unless the member explicitly overrides.
 - **Floor price is absolute.** Never accept, counter, or suggest a price below `inventory_items.floor_price`.
 - **One item, one sale.** When an item sells anywhere, every other live listing for it must be ended. The app creates `delist` tasks automatically; treat them as urgent.
 - **No credentials.** Agents never handle marketplace passwords. Use official OAuth (eBay, Etsy) or the human does the step.
@@ -66,10 +67,11 @@ The two people using this app asked for it to talk the way they do: casual, funn
 ## Project map
 
 - `app/(app)/` signed-in pages: overview, inventory, item detail, offers, settings
-- `app/actions.ts` all writes (server actions); every write also logs to `activity_log`
+- `app/actions.ts` all writes (server actions); every write also logs to `activity_log`. Offer decisions and sales go through the SQL core `apply_offer_decision` / `apply_sale` (migration `20261031000000_assistant_access.sql`) via `decide_offer` / `record_sale`, shared with the assistant API, so change the rules there, not in TypeScript
 - `lib/photos.ts` item photos (public `item-photos` bucket): `loadPhotos(ctx, itemId)` / `publicPhotoUrl(path)` give the public HTTPS image URLs to put on marketplace listings. Uploads go browser → Storage directly (`components/photo-uploader.tsx` resizes to 2000px JPEG with `lib/photo-client.ts`), then `recordItemPhoto` in `app/photo-actions.ts` validates the path and writes the row; never route photo bytes through a server action (Vercel's 4.5 MB body cap)
 - `app/api/export` CSV exports
 - `app/api/ebay/*` eBay OAuth (connect/callback), account-deletion compliance endpoint, scheduled offer sync (`CRON_SECRET`)
+- `app/api/assistant` the household's personal AI assistant (Muse, ChatGPT) reads what needs a decision and relays the member's answer; keyed by `assistant_keys` made in Settings (`components/assistant-keys.tsx`, `app/assistant-actions.ts`), logic in `lib/assistant/`, paste-ready assistant instructions in `docs/agents/assistant-concierge.md`
 - `app/marketplace-actions.ts` human-triggered eBay writes (post, reprice, end, sync, disconnect); `lib/ebay/` pure, tested client (REST + Trading XML), `lib/crypto.ts` token encryption
 - `components/marketplace-connections.tsx` (Settings) and `components/post-to-ebay.tsx` (item page) are the eBay UI
 - `lib/fees.ts` fee rules per platform with `verifiedOn` dates; update the date and source when you re-check

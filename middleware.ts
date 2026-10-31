@@ -3,7 +3,10 @@ import { NextResponse, type NextRequest } from "next/server";
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
-const PUBLIC_PATHS = ["/login", "/auth", "/manifest.webmanifest", "/apple-icon", "/icon.svg"];
+// Routes that carry their own credential instead of a browser session: the assistant key, the cron secret,
+// eBay's signed account-deletion notices. Without this the middleware would bounce them to /login.
+const SELF_AUTHENTICATED_API = ["/api/assistant", "/api/ebay/sync", "/api/ebay/account-deletion"];
+const PUBLIC_PATHS = ["/login", "/auth", "/manifest.webmanifest", "/apple-icon", "/icon.svg", ...SELF_AUTHENTICATED_API];
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });

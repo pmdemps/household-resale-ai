@@ -36,10 +36,9 @@ Dashboard, items with location/size/condition/floor price, listings per platform
 - Push notification: "Kids' sneakers · $5.99 on Vinted · offer $3.99 · you'd get $3.99. Accept?"
 - Needs: a server-side agent key (service role, never in the browser), real sample emails to build parsers against, dedupe by message ID.
 
-### Stage 3 — Agent API + approval loop
-- `/api/agent/*` endpoints with per-agent tokens (scoped to one household, revocable, logged as `actor_agent`).
-- Agents can read inventory, propose tasks, and report results; only humans can approve.
-- Any AI (Claude, ChatGPT, Gemini) plugs in through the same API or an MCP server wrapping it.
+### Stage 3 — Agent API + approval loop (first half ✅)
+- ✅ `/api/assistant`: per-member assistant keys (made in Settings, revocable, SHA-256 stored, logged as `actor_agent`). The household's own assistant (Muse, ChatGPT) reads what needs a decision and relays the member's accept / counter / decline, records offers and sales the member confirmed, leaves notes and closes to-dos. Floor price enforced in SQL. See `docs/agents/assistant-concierge.md`.
+- Later: read-only / propose-only keys for autonomous agents (today a key always acts for a member), an MCP server wrapping the same calls.
 
 ### Stage 4 — eBay integration
 - eBay OAuth (user token stored encrypted server-side).

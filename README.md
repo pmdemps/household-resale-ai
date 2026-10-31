@@ -4,7 +4,7 @@ Open-source AI-powered resale management platform for inventory tracking, deal a
 
 ## Current status
 
-**Stage 1: working inventory tracker.** Supabase auth, a shared household, inventory, listings per marketplace, offers with fee-aware accept/counter/decline, sales with real profit, automatic delist tasks after a sale, and CSV export. Marketplace integrations and background agents are next. See [docs/roadmap.md](docs/roadmap.md) for the staged plan and what each marketplace actually allows, and [AGENTS.md](AGENTS.md) for how AI agents work on this project.
+**Stage 1: working inventory tracker.** Supabase auth, a shared household, inventory, listings per marketplace, offers with fee-aware accept/counter/decline, sales with real profit, automatic delist tasks after a sale, and CSV export. eBay integration (OAuth, posting, Best Offers), a scheduled Gmail offer watcher, and an assistant API so your own AI (Muse, ChatGPT) can tell you about offers and relay your answer (`docs/agents/assistant-concierge.md`). See [docs/roadmap.md](docs/roadmap.md) for the staged plan and what each marketplace actually allows, and [AGENTS.md](AGENTS.md) for how AI agents work on this project.
 
 ## Product direction
 
