@@ -6,6 +6,8 @@ import { cookies } from "next/headers";
 import { ThemePicker } from "@/components/theme-toggle";
 import { THEME_COOKIE, parseTheme } from "@/lib/theme";
 import { MarketplaceConnections } from "@/components/marketplace-connections";
+import { AssistantAccess } from "@/components/assistant-keys";
+import { loadMemberNames } from "@/lib/queries";
 
 const EXPORTS = [
   { type: "items", label: "All our shit" },
@@ -18,7 +20,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const ctx = await requireHousehold();
   const { member, name } = await searchParams;
   const theme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
-  const { data: members } = await ctx.supabase.from("household_members").select("user_id, role, display_name").eq("household_id", ctx.household.id);
+  const [{ data: members }, names] = await Promise.all([
+    ctx.supabase.from("household_members").select("user_id, role, display_name").eq("household_id", ctx.household.id),
+    loadMemberNames(ctx),
+  ]);
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -76,6 +81,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       </form>
 
       <MarketplaceConnections ctx={ctx} />
+
+      <AssistantAccess ctx={ctx} names={names} />
 
       <section className="surface p-5">
         <h2 className="text-base font-semibold text-white">Marketplaces</h2>

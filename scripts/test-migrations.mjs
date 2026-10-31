@@ -61,7 +61,15 @@ async function asAnon(sql, params = []) {
 }
 let failures = 0;
 const check = (cond, msg) => { console.log((cond ? "PASS " : "FAIL ") + msg); if (!cond) failures++; };
-async function expectError(fn, msg) { try { await fn(); check(false, msg); } catch { check(true, msg); } }
+/** Pass `like` to also require the error message to match (so a check cannot pass because of an unrelated error). */
+async function expectError(fn, msg, like) {
+  try { await fn(); check(false, msg); }
+  catch (e) {
+    const text = String(e?.message ?? e);
+    if (like && !like.test(text)) check(false, `${msg} (error was: ${text.slice(0, 160)})`);
+    else check(true, msg);
+  }
+}
 
 const hA = (await as(A, "select public.create_household('A house') as id")).rows[0].id;
 const hB = (await as(B, "select public.create_household('B house') as id")).rows[0].id;
@@ -249,6 +257,135 @@ await asService("select public.record_ebay_account_deletion($1, $2, $3::jsonb)",
 check((await db.query("select count(*)::int as n from public.ebay_account_deletion_log")).rows[0].n === 2, "unknown users are still logged, nothing else changes");
 await asService("select public.record_ebay_account_deletion($1, $2, $3::jsonb)", [null, null, "{}"]);
 check((await db.query("select username_hash, user_id_hash from public.ebay_account_deletion_log order by received_at desc limit 1")).rows[0].user_id_hash === null, "missing identifiers are logged as null, not hashed");
+
+// --- assistant access: keys, inbox, decisions relayed by a personal assistant (A and B are members of hA, C is not) ---
+const token = "rhq_" + "t".repeat(43); // what the app would hand to Muse; only its hash is stored
+const tokenHash = createHash("sha256").update(token, "utf8").digest("hex");
+check((await db.query("select public.sha256_hex($1) as h", [token])).rows[0].h === tokenHash, "assistant key hash in SQL matches node:crypto");
+const key = (await as(A, `insert into public.assistant_keys (household_id, user_id, label, key_hash, key_prefix) values ($1, $2, 'muse', $3, $4) returning id, key_prefix`, [hA, A, tokenHash, token.slice(0, 12)])).rows[0];
+check(key.key_prefix === "rhq_tttttttt", "member creates an assistant key for themself");
+check((await as(B, "select id, label, key_prefix, revoked_at from public.assistant_keys")).rows.length === 1, "co-member sees the household's keys (without the hash)");
+check((await as(C, "select id from public.assistant_keys")).rows.length === 0, "non-member sees no keys");
+await expectError(() => as(A, "select key_hash from public.assistant_keys"), "key hash column is not readable by clients", /permission denied/);
+await expectError(() => asAnon("select id from public.assistant_keys"), "anon cannot read keys", /permission denied/);
+await expectError(() => as(A, `insert into public.assistant_keys (household_id, user_id, label, key_hash, key_prefix) values ($1, $2, 'x', $3, 'rhq_x')`, [hA, B, "a".repeat(64)]),
+  "cannot create a key that acts for another member", /row-level security/);
+await expectError(() => as(C, `insert into public.assistant_keys (household_id, user_id, label, key_hash, key_prefix) values ($1, $2, 'x', $3, 'rhq_x')`, [hA, C, "b".repeat(64)]),
+  "non-member cannot create a key for another household", /row-level security/);
+await expectError(() => as(A, `insert into public.assistant_keys (household_id, user_id, label, key_hash, key_prefix) values ($1, $2, 'x', 'nothex', 'rhq_x')`, [hA, A]),
+  "key hash must be 64 hex characters", /check constraint/);
+
+// A second item with three listings, a floor of $10 and offers above and below it.
+const item2 = (await as(A, `insert into public.inventory_items (household_id, created_by, name, floor_price, purchase_cost) values ($1, $2, 'Toddler rain boots', 10, 4) returning id`, [hA, A])).rows[0].id;
+const vinted2 = (await as(A, `insert into public.listings (household_id, item_id, platform, status, list_price, created_by) values ($1, $2, 'vinted', 'active', 20, $3) returning id`, [hA, item2, A])).rows[0].id;
+const ebay2 = (await as(A, `insert into public.listings (household_id, item_id, platform, status, list_price, external_id, created_by) values ($1, $2, 'ebay', 'active', 25, '110000002', $3) returning id`, [hA, item2, A])).rows[0].id;
+const etsy2 = (await as(A, `insert into public.listings (household_id, item_id, platform, status, list_price, created_by) values ($1, $2, 'etsy', 'draft', 18, $3) returning id`, [hA, item2, A])).rows[0].id;
+async function offerWithTask(listingId, amount, extra = {}) {
+  const id = (await as(A, `insert into public.offers (household_id, listing_id, amount, source, external_id) values ($1, $2, $3, $4, $5) returning id`, [hA, listingId, amount, extra.source ?? "email", extra.externalId ?? null])).rows[0].id;
+  await as(A, `insert into public.agent_tasks (household_id, kind, title, listing_id, item_id, offer_id, requested_by) values ($1, 'offer_decision', $2, $3, $4, $5, 'gmail-watcher')`, [hA, `Offer: $${amount} on test`, listingId, item2, id]);
+  return id;
+}
+const low = await offerWithTask(vinted2, 8);
+const mid = await offerWithTask(vinted2, 12);
+const good = await offerWithTask(vinted2, 15);
+const ebayOffer = await offerWithTask(ebay2, 22, { source: "api", externalId: "BO-9" });
+
+await expectError(() => asAnon("select public.assistant_inbox($1)", ["rhq_" + "x".repeat(43)]), "unknown assistant key is rejected", /Invalid assistant key/);
+await expectError(() => asAnon("select public.assistant_inbox($1)", ["short"]), "malformed assistant key is rejected", /Invalid assistant key/);
+const inbox1 = (await asAnon("select public.assistant_inbox($1) as v", [token])).rows[0].v;
+check(inbox1.household?.id === hA && inbox1.assistant === "muse" && inbox1.member?.name === "Alex", "inbox identifies the household, the member and the assistant");
+const inboxOffer = inbox1.pending_offers.find(o => o.offer_id === good);
+check(Boolean(inboxOffer) && Number(inboxOffer.amount) === 15 && inboxOffer.item.name === "Toddler rain boots" && Number(inboxOffer.item.floor_price) === 10 && inboxOffer.listing.platform === "vinted" && inboxOffer.is_new === true,
+  "inbox lists pending offers with item, floor and platform, flagged new on first check");
+check(inbox1.listings.some(l => l.listing_id === etsy2 && l.status === "draft") && !inbox1.tasks.some(t => t.kind === "offer_decision"), "inbox lists live listings for matching and keeps offer tasks out of the to-do list");
+const inbox2 = (await asAnon("select public.assistant_inbox($1) as v", [token])).rows[0].v;
+check(inbox2.pending_offers.find(o => o.offer_id === good)?.is_new === false, "second check no longer flags the same offer as new");
+check((await as(A, "select last_used_at from public.assistant_keys where id = $1", [key.id])).rows[0].last_used_at !== null, "key use is recorded");
+
+await expectError(() => asAnon("select public.apply_offer_decision($1, $2, 'x', $3, 'accepted', null, 0, 0, true)", [hA, A, good]), "anon cannot call the decision core directly", /permission denied/);
+await expectError(() => asAnon("select public.apply_sale($1, $2, 'x', $3, 1, 0, 0, null)", [hA, A, vinted2]), "anon cannot call the sale core directly", /permission denied/);
+await expectError(() => asAnon("select * from public.assistant_resolve_key($1)", [token]), "anon cannot resolve keys directly", /permission denied/);
+await expectError(() => asAnon("select public.assistant_decide_offer($1, $2, 'accepted')", [token, low]), "assistant cannot accept an offer below the floor price", /below the floor price/);
+await expectError(() => asAnon("select public.assistant_decide_offer($1, $2, 'countered', 9)", [token, mid]), "assistant cannot counter below the floor price", /below the floor price/);
+await expectError(() => asAnon("select public.assistant_decide_offer($1, $2, 'countered')", [token, mid]), "a counter needs an amount", /counter needs an amount/);
+await expectError(() => asAnon("select public.assistant_decide_offer($1, $2, 'maybe')", [token, mid]), "decision must be accepted, declined or countered", /Invalid decision/);
+const declined = (await asAnon("select public.assistant_decide_offer($1, $2, 'declined') as v", [token, low])).rows[0].v;
+check(declined.decision === "declined" && declined.tasks_closed === 1 && declined.item.name === "Toddler rain boots", "assistant declines an offer and its task is closed");
+const countered = (await asAnon("select public.assistant_decide_offer($1, $2, 'countered', 14) as v", [token, mid])).rows[0].v;
+check(countered.decision === "countered" && Number(countered.counter_amount) === 14, "assistant counters at or above the floor");
+check((await as(A, "select status, counter_amount, decided_by from public.offers where id = $1", [mid])).rows[0].decided_by === A, "relayed decisions are attributed to the key's member");
+await expectError(() => asAnon("select public.assistant_decide_offer($1, $2, 'accepted')", [token, mid]), "an offer cannot be decided twice", /already been decided/);
+
+const accepted = (await asAnon("select public.assistant_decide_offer($1, $2, 'accepted', null, 0, 0) as v", [token, good])).rows[0].v;
+check(accepted.decision === "accepted" && accepted.sale && Number(accepted.sale.sale_price) === 15 && accepted.sale.delist_tasks === 2, "accepting records the sale and queues delist tasks for the two other listings");
+const soldItem = (await as(A, "select status, sold_price from public.inventory_items where id = $1", [item2])).rows[0];
+check(soldItem.status === "sold" && Number(soldItem.sold_price) === 15, "accepting marks the item sold");
+check((await as(A, "select status from public.listings where id = $1", [vinted2])).rows[0].status === "sold", "accepting marks the listing sold");
+check((await as(A, "select status from public.offers where id = $1", [ebayOffer])).rows[0].status === "declined", "pending offers on the item's other listings are declined");
+check((await as(A, "select status from public.agent_tasks where offer_id = $1", [ebayOffer])).rows[0].status === "cancelled", "and their decision tasks are cancelled");
+const delistTasks = (await as(A, "select id, listing_id, title from public.agent_tasks where item_id = $1 and kind = 'delist' order by title", [item2])).rows;
+check(delistTasks.length === 2 && delistTasks.some(t => t.title === "Pull it off eBay, it already fucking sold") && delistTasks.some(t => t.title === "Pull it off Etsy, it already fucking sold"), "delist tasks name the platform like the app does");
+const acceptLog = (await as(A, "select actor_user, actor_agent, action, detail from public.activity_log where entity_id = $1 and action = 'offer_accepted'", [good])).rows[0];
+check(acceptLog?.actor_user === A && acceptLog?.actor_agent === "muse" && Number(acceptLog.detail.amount) === 15, "activity log shows the member and the assistant");
+check((await as(A, "select count(*)::int as n from public.activity_log where household_id = $1 and action = 'sale_recorded' and actor_agent = 'muse'", [hA])).rows[0].n === 1, "the sale itself is logged too");
+await expectError(() => asAnon("select public.assistant_record_sale($1, $2, 9)", [token, ebay2]), "an item cannot be sold twice", /already recorded as sold/);
+
+// Floor override is explicit.
+const item4 = (await as(A, `insert into public.inventory_items (household_id, created_by, name, floor_price) values ($1, $2, 'Wooden puzzle', 10) returning id`, [hA, A])).rows[0].id;
+const vinted4 = (await as(A, `insert into public.listings (household_id, item_id, platform, status, list_price, created_by) values ($1, $2, 'vinted', 'active', 14, $3) returning id`, [hA, item4, A])).rows[0].id;
+const low4 = (await as(A, `insert into public.offers (household_id, listing_id, amount) values ($1, $2, 8) returning id`, [hA, vinted4])).rows[0].id;
+await expectError(() => asAnon("select public.assistant_decide_offer($1, $2, 'accepted')", [token, low4]), "below-floor accept is refused without an override", /below the floor price/);
+check((await asAnon("select public.assistant_decide_offer($1, $2, 'accepted', null, 0, 0, true) as v", [token, low4])).rows[0].v.decision === "accepted", "below-floor accept goes through with an explicit override");
+
+// Recording offers and sales the assistant saw in email.
+const item3 = (await as(A, `insert into public.inventory_items (household_id, created_by, name, floor_price) values ($1, $2, 'Kids bike helmet', 5) returning id`, [hA, A])).rows[0].id;
+const vinted3 = (await as(A, `insert into public.listings (household_id, item_id, platform, status, list_price, created_by) values ($1, $2, 'vinted', 'draft', 9, $3) returning id`, [hA, item3, A])).rows[0].id;
+const rec1 = (await asAnon("select public.assistant_record_offer($1, $2, 7, 'buyer_42', 'From Gmail: New offer', 'email') as v", [token, vinted3])).rows[0].v;
+check(rec1.duplicate === false && rec1.item.name === "Kids bike helmet", "assistant records an offer it saw in an email");
+const recTask = (await as(A, "select title, requested_by, status from public.agent_tasks where offer_id = $1", [rec1.offer_id])).rows[0];
+check(recTask?.title === "Offer: $7.00 for Kids bike helmet on Vinted" && recTask.requested_by === "muse", "a decision task is created with the watcher's title format");
+const rec2 = (await asAnon("select public.assistant_record_offer($1, $2, 7) as v", [token, vinted3])).rows[0].v;
+check(rec2.duplicate === true && rec2.offer_id === rec1.offer_id, "the same amount within two days is the same offer");
+await expectError(() => asAnon("select public.assistant_record_offer($1, $2, 7)", [token, vinted2]), "cannot record an offer on a sold listing", /cannot take offers/);
+const hBListing = (await as(B, `insert into public.inventory_items (household_id, created_by, name) values ($1, $2, 'B thing') returning id`, [hB, B])).rows[0].id;
+const hBVinted = (await as(B, `insert into public.listings (household_id, item_id, platform, status, list_price, created_by) values ($1, $2, 'vinted', 'active', 3, $3) returning id`, [hB, hBListing, B])).rows[0].id;
+await expectError(() => asAnon("select public.assistant_record_offer($1, $2, 2)", [token, hBVinted]), "a key cannot touch another household's listing", /Listing not found/);
+const sale3 = (await asAnon("select public.assistant_record_sale($1, $2, 9, 0, 0) as v", [token, vinted3])).rows[0].v;
+check(Number(sale3.sale_price) === 9 && sale3.delist_tasks === 0, "assistant records a confirmed sale");
+check((await as(A, "select status from public.offers where id = $1", [rec1.offer_id])).rows[0].status === "declined", "recording a sale declines the listing's pending offers");
+
+// Notes, to-dos.
+const note3 = (await asAnon("select public.assistant_add_note($1, 'Patrick says the box is in the garage', $2) as v", [token, item3])).rows[0].v;
+check((await as(A, "select author, body from public.notes where id = $1", [note3.note_id])).rows[0].author === A, "assistant notes are authored by the member");
+await expectError(() => asAnon("select public.assistant_add_note($1, 'x', $2)", [token, hBListing]), "cannot comment on another household's item", /Item not found/);
+await expectError(() => asAnon("select public.assistant_add_note($1, '   ')", [token]), "a note needs text", /needs some text/);
+const prop = (await asAnon("select public.assistant_propose_task($1, 'message_reply', 'Buyer message on Vinted: is it waterproof?', 'Asked about the boots') as v", [token])).rows[0].v;
+check(prop.duplicate === false && (await as(A, "select requested_by, status from public.agent_tasks where id = $1", [prop.task_id])).rows[0].requested_by === "muse", "assistant proposes a to-do");
+check((await asAnon("select public.assistant_propose_task($1, 'other', 'Buyer message on Vinted: is it waterproof?') as v", [token])).rows[0].v.duplicate === true, "same title within three days is not repeated");
+await expectError(() => asAnon("select public.assistant_propose_task($1, 'delist', 'x')", [token]), "assistant cannot create delist or offer tasks directly", /Kind must be/);
+const ebayDelist = delistTasks.find(t => t.listing_id === ebay2);
+check((await asAnon("select public.assistant_resolve_task($1, $2, 'done') as v", [token, ebayDelist.id])).rows[0].v.status === "done", "assistant closes a delist task");
+check((await as(A, "select status from public.listings where id = $1", [ebay2])).rows[0].status === "ended", "closing a delist task ends the listing");
+await expectError(() => asAnon("select public.assistant_resolve_task($1, $2, 'done')", [token, ebayDelist.id]), "a closed task stays closed", /already done/);
+const offerTask = (await as(A, "select id from public.agent_tasks where offer_id = $1", [mid])).rows[0];
+await expectError(() => asAnon("select public.assistant_resolve_task($1, $2, 'done')", [token, offerTask.id]), "offer tasks are decided through the offer, not closed", /Decide the offer itself/);
+
+// Member wrappers (the app's server actions).
+const memberOffer = (await as(A, `select id from public.offers where listing_id = $1 and amount = 3.99`, [listing])).rows[0].id;
+await expectError(() => as(C, "select public.decide_offer($1, 'declined')", [memberOffer]), "non-member cannot decide an offer through the wrapper", /Offer not found/);
+await expectError(() => asAnon("select public.decide_offer($1, 'declined')", [memberOffer]), "anon cannot call the member wrapper", /permission denied/);
+check((await as(A, "select public.decide_offer($1, 'declined') as v", [memberOffer])).rows[0].v.decision === "declined", "member declines through the shared core");
+check((await as(A, "select actor_user, actor_agent from public.activity_log where entity_id = $1 and action = 'offer_declined'", [memberOffer])).rows[0].actor_agent === null, "member decisions carry no actor_agent");
+await expectError(() => as(A, "select public.record_sale($1, 5)", [listing]), "member cannot record a second sale for an item", /already recorded as sold/);
+await expectError(() => as(C, "select public.record_sale($1, 5)", [hBVinted]), "non-member cannot record a sale through the wrapper", /Listing not found/);
+
+// Revocation.
+await expectError(() => as(B, "update public.assistant_keys set key_hash = $2 where id = $1", [key.id, "c".repeat(64)]), "key hash cannot be changed by clients", /permission denied/);
+check((await as(B, "update public.assistant_keys set revoked_at = now() where id = $1 returning id", [key.id])).rows.length === 1, "a co-member can revoke a key");
+await expectError(() => asAnon("select public.assistant_inbox($1)", [token]), "a revoked key no longer works", /Invalid assistant key/);
+await expectError(() => as(A, "update public.assistant_keys set revoked_at = null where id = $1", [key.id]), "a revoked key cannot be un-revoked", /stays revoked/);
+check((await as(B, "delete from public.assistant_keys where id = $1 returning id", [key.id])).rows.length === 0, "member (non-admin) cannot delete a key");
+check((await as(A, "delete from public.assistant_keys where id = $1 returning id", [key.id])).rows.length === 1, "admin deletes a key");
 
 console.log(failures ? `${failures} FAILED` : "ALL PASSED");
 process.exit(failures ? 1 : 0);

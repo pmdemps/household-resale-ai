@@ -11,6 +11,10 @@ Time: about 20 minutes. Cost: $0 (Supabase Free + Vercel Hobby, which is fine fo
    1. `20261029000000_initial_schema.sql`
    2. `20261029010000_listings_offers_sales.sql`
    3. `20261029020000_notes_and_names.sql`
+   4. `20261030000000_function_search_path.sql`
+   5. `20261030010000_marketplace_connections.sql`
+   6. `20261030020000_item_photos.sql`
+   7. `20261031000000_assistant_access.sql` (offer decisions, sales and the assistant API run through its SQL functions, so the app needs it)
 3. **Project Settings → API Keys**: copy the **Project URL** and the **publishable** key. Never use the `service_role`/secret key in the web app.
 
 ## 2. Vercel (the website)

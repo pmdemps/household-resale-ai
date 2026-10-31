@@ -201,6 +201,10 @@ function describe(action: string, d: Record<string, unknown>) {
     case "comment_added": return "Commented on an item";
     case "member_added": return "Added someone to the house";
     case "sale_recorded": return `Sold on ${platformName(String(d.platform))} for ${money(Number(d.salePrice))}. Fuck yes.`;
+    case "task_proposed": return `Put "${String(d.title ?? "something")}" on the to-do list`;
+    case "task_done": return `Knocked out "${String(d.title ?? "a to-do")}"`;
+    case "assistant_key_created": return `Gave ${String(d.label ?? "an AI sidekick")} a key`;
+    case "assistant_key_revoked": return `Cut off ${String(d.label ?? "an AI sidekick")}'s key`;
     default: return action.replace(/_/g, " ");
   }
 }
