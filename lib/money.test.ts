@@ -82,10 +82,10 @@ test("summarize compares this month with last month", () => {
 });
 
 test("profitSentence speaks plainly", () => {
-  assert.equal(profitSentence({ profit: 23, sold: 2 }), "Up $23 this month. Hell yeah.");
-  assert.equal(profitSentence({ profit: 23.45, sold: 2 }), "Up $23.45 this month. Hell yeah.");
-  assert.equal(profitSentence({ profit: -4, sold: 1 }), "Down $4 this month. Well, shit.");
-  assert.equal(profitSentence({ profit: 0, sold: 0 }), "Nothing sold this month. Yet.");
+  assert.equal(profitSentence({ profit: 23, sold: 2 }), "Up $23 this month. Fuck yeah.");
+  assert.equal(profitSentence({ profit: 23.45, sold: 2 }), "Up $23.45 this month. Fuck yeah.");
+  assert.equal(profitSentence({ profit: -4, sold: 1 }), "Down $4 this month. Well, fuck.");
+  assert.equal(profitSentence({ profit: 0, sold: 0 }), "Haven't sold shit this month. Yet.");
   assert.equal(profitSentence({ profit: 0, sold: 1 }), "Broke even this month. Meh.");
 });
 

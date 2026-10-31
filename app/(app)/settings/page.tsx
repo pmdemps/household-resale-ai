@@ -32,7 +32,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
       <section className="surface p-5">
         <h2 className="text-base font-semibold text-white">Your name</h2>
-        <p className="mt-1 text-sm text-slate-400">So we know who said what.</p>
+        <p className="mt-1 text-sm text-slate-400">So we know who said what shit.</p>
         <form action={setDisplayName} className="mt-3 flex flex-wrap gap-2">
           <input name="display_name" maxLength={40} className="field min-w-[12rem] flex-1" placeholder="First name"
             defaultValue={(members ?? []).find(m => m.user_id === ctx.userId)?.display_name ?? ""} />
@@ -58,7 +58,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </form>
         )}
         {member === "added" && <p className="mt-2 text-sm text-good">Added. They&apos;ll see this household next time they sign in.</p>}
-        {member === "not_found" && <p className="mt-2 text-sm text-warn">No account with that email yet. Have them sign up first, then add them.</p>}
+        {member === "not_found" && <p className="mt-2 text-sm text-warn">No account with that email yet. Have them sign the fuck up first, then add them.</p>}
       </section>
 
       <section className="surface p-5">
@@ -72,7 +72,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       </section>
 
       <form action={signOut} className="lg:hidden">
-        <button className="btn-secondary w-full"><LogOut size={15} /> Peace out</button>
+        <button className="btn-secondary w-full"><LogOut size={15} /> Peace the fuck out</button>
       </form>
 
       <MarketplaceConnections ctx={ctx} />

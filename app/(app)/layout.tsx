@@ -42,7 +42,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
         <form action={signOut} className="mt-2">
           <button className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-slate-500 hover:bg-white/[0.04] hover:text-white">
-            <LogOut size={16} /> Peace out
+            <LogOut size={16} /> Peace the fuck out
           </button>
         </form>
       </aside>

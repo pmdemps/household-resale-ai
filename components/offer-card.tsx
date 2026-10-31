@@ -51,7 +51,7 @@ export function OfferCard({ offer }: { offer: OfferWithContext }) {
 
       {belowFloor && (
         <p className="mt-3 flex items-center gap-2 rounded-lg border border-warn/20 bg-warn/[0.07] px-3 py-2 text-xs text-warn">
-          <AlertTriangle size={14} /> Lowball alert. That&apos;s under our floor of {money(floor!)}.
+          <AlertTriangle size={14} /> Lowball alert. That&apos;s under our floor of {money(floor!)}. Fuck that.
         </p>
       )}
 
@@ -93,7 +93,7 @@ export function OfferCard({ offer }: { offer: OfferWithContext }) {
         <form action={decideOffer}>
           <input type="hidden" name="offer_id" value={offer.id} />
           <input type="hidden" name="decision" value="declined" />
-          <button className="btn-secondary"><X size={15} /> Hell no</button>
+          <button className="btn-secondary"><X size={15} /> Fuck no</button>
         </form>
       </div>
       <p className="mt-2 text-[11px] text-slate-500">
@@ -101,7 +101,7 @@ export function OfferCard({ offer }: { offer: OfferWithContext }) {
           <>This one came from eBay, so your answer goes straight to eBay. The buyer just sees a normal accept, counter or decline. If it shits the bed, a to-do shows up telling you to do it in the eBay app.</>
         ) : (
           <>
-            This only saves it here. You still have to tap the same button in the
+            This only saves it here. You still have to go tap the same damn button in the
             {" "}{platformName(offer.listing.platform)} app{offer.listing.listing_url ? <> (<a className="text-link hover:underline" href={offer.listing.listing_url} target="_blank" rel="noreferrer">open listing</a>)</> : ""}.
           </>
         )}

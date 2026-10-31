@@ -14,7 +14,7 @@ export default async function OffersPage() {
       </header>
       {offers.length === 0 ? (
         <div className="surface p-8 text-center text-sm text-slate-400">
-          No offers. Nobody&apos;s biting yet. When one comes in, open the item and hit <span className="text-slate-200">Got an offer or a sale?</span>
+          No offers. Nobody&apos;s fucking biting yet. When one comes in, open the item and hit <span className="text-slate-200">Got an offer or a sale?</span>
           {" "}or <Link href="/inventory?status=listed" className="text-link hover:underline">see what&apos;s for sale</Link>.
         </div>
       ) : (

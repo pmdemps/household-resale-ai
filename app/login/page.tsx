@@ -33,9 +33,9 @@ export default function LoginPage() {
     } catch (error) {
       const text = error instanceof Error ? error.message : "";
       setMessage(
-        /invalid login credentials/i.test(text) ? "Nope. Wrong email or password."
+        /invalid login credentials/i.test(text) ? "Nope. Wrong fucking email or password."
           : /already registered/i.test(text) ? "That email already has an account. Sign in instead."
-          : text || "Couldn't sign you in. Something's screwed up, try again.",
+          : text || "Couldn't sign you in. Something's fucked up, try again.",
       );
     } finally {
       setBusy(false);
@@ -46,7 +46,7 @@ export default function LoginPage() {
     <section className="surface w-full max-w-md p-7 sm:p-8">
       <Link href="/" className="text-sm text-link hover:underline">← Resale HQ</Link>
       <p className="eyebrow mt-7">Members only</p>
-      <h1 className="mt-2 text-2xl font-semibold text-white">{mode === "signin" ? "Well, look who's back" : "Make an account"}</h1>
+      <h1 className="mt-2 text-2xl font-semibold text-white">{mode === "signin" ? "Well, look who the fuck is back" : "Make an account"}</h1>
       <p className="mt-2 text-sm leading-6 text-slate-400">{mode === "signin" ? "Sign in. Let's go sell some shit." : "Takes a minute. Then whoever runs the house adds you from their Settings."}</p>
       <div className="mt-6 grid grid-cols-2 rounded-xl border border-line p-1">
         <button type="button" onClick={() => { setMode("signin"); setMessage(""); }} className={"rounded-lg py-2 text-sm " + (mode === "signin" ? "bg-white/10 text-white" : "text-slate-400")}>Sign in</button>

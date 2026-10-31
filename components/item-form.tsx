@@ -11,7 +11,7 @@ export function ItemForm({ action, item }: Props) {
   return (
     <form action={action} className="space-y-5">
       {item && <input type="hidden" name="id" value={item.id} />}
-      <Field label="What the hell is it?" htmlFor="name">
+      <Field label="What the fuck is it?" htmlFor="name">
         <input id="name" name="name" className="field" required maxLength={200} defaultValue={item?.name} placeholder="Boys' Nike Air Max sneakers" autoFocus={!editing} />
       </Field>
 
@@ -47,10 +47,10 @@ export function ItemForm({ action, item }: Props) {
         <Field label="Asking price ($)" htmlFor="target_price">
           <input id="target_price" name="target_price" type="number" min="0" step="0.01" inputMode="decimal" className="field" defaultValue={item ? item.target_price : ""} placeholder="0.00" />
         </Field>
-        <Field label="Lowest we'd take ($)" htmlFor="floor_price" hint="Nobody goes below this. Ever.">
+        <Field label="Lowest we'd take ($)" htmlFor="floor_price" hint="Nobody goes below this. Fucking ever.">
           <input id="floor_price" name="floor_price" type="number" min="0" step="0.01" inputMode="decimal" className="field" defaultValue={item?.floor_price ?? ""} placeholder="0.00" />
         </Field>
-        <Field label="What we paid ($)" htmlFor="purchase_cost" hint="0 if no clue">
+        <Field label="What we paid ($)" htmlFor="purchase_cost" hint="0 if who the fuck knows">
           <input id="purchase_cost" name="purchase_cost" type="number" min="0" step="0.01" inputMode="decimal" className="field" defaultValue={item ? item.purchase_cost : ""} placeholder="0.00" />
         </Field>
       </div>

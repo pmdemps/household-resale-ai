@@ -7,7 +7,7 @@ export default function NotFound() {
       <section className="surface w-full max-w-md p-7 text-center">
         <p className="text-4xl" aria-hidden>🤷</p>
         <h1 className="mt-3 text-2xl font-semibold tracking-tight text-white">This shit doesn&apos;t exist.</h1>
-        <p className="mt-2 text-sm leading-6 text-slate-400">Maybe we deleted it, maybe the link is busted. Either way, it&apos;s not here.</p>
+        <p className="mt-2 text-sm leading-6 text-slate-400">Maybe we deleted it, maybe the link is busted. Either way, it&apos;s not fucking here.</p>
         <Link href="/" className="btn-primary mt-5">Take me home</Link>
       </section>
     </main>

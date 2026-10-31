@@ -15,8 +15,8 @@ export const ITEM_STATUS_LABELS: Record<ItemStatus, string> = {
   draft: "Collecting dust",
   listed: "For sale",
   pending_sale: "Almost gone",
-  sold: "Sold, baby",
-  returned: "Came back, ugh",
+  sold: "Fucking sold",
+  returned: "Fucking returned",
   donated: "Gave it away",
   discarded: "Trashed",
 };
@@ -34,7 +34,7 @@ export const listingStatusLabel = (status: string): string => LISTING_STATUS_LAB
 export const OFFER_STATUS_LABELS: Record<OfferStatus, string> = {
   pending: "Your move",
   accepted: "Took it",
-  declined: "Told 'em no",
+  declined: "Told 'em to fuck off",
   countered: "Countered",
   expired: "Fizzled out",
   withdrawn: "They bailed",

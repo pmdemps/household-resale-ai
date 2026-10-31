@@ -61,7 +61,7 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
               {item.storage_location && <span className="inline-flex items-center gap-1">· <MapPin size={13} />{item.storage_location}</span>}
             </p>
           </div>
-          <div className="text-right text-sm">
+          <div className="text-sm sm:text-right">
             <p className="text-slate-400">Asking <span className="font-semibold text-white">{money(num(item.target_price))}</span></p>
             {item.floor_price !== null && <p className="text-slate-500">Rock bottom {money(num(item.floor_price))}</p>}
           </div>
@@ -72,7 +72,7 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
 
       {sale && (
         <section className="surface p-5">
-          <h2 className="text-base font-semibold text-white">Sold on {platformName(sale.platform)}{saleProfit < 0 ? ". At least it's gone." : ", hell yeah"}</h2>
+          <h2 className="text-base font-semibold text-white">Sold on {platformName(sale.platform)}{saleProfit < 0 ? ". At least it's fucking gone." : ", fuck yeah"}</h2>
           <p className="mt-1 text-xs text-slate-500">{new Date(sale.sold_at).toLocaleDateString()}</p>
           <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
             <Metric label="Sale price" value={money(num(sale.sale_price))} />
@@ -88,7 +88,7 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
 
       {pending.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-white">Somebody wants this</h2>
+          <h2 className="text-lg font-semibold text-white">Somebody wants this shit</h2>
           {pending.map(o => <OfferCard key={o.id} offer={o} />)}
         </section>
       )}
@@ -99,7 +99,7 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
 
           <section className="surface p-5">
             <h2 className="text-base font-semibold text-white">Listed on</h2>
-            {listings.length === 0 && <p className="mt-2 text-sm text-slate-500">Not listed anywhere yet. It&apos;s just sitting there.</p>}
+            {listings.length === 0 && <p className="mt-2 text-sm text-slate-500">Not listed anywhere yet. It&apos;s just sitting there like an asshole.</p>}
             <ul className="mt-3 space-y-3">
               {listings.map(l => (
                 <li key={l.id} className="rounded-xl border border-line p-4">
@@ -139,7 +139,7 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
                             <button className="btn-secondary w-full">Add offer</button>
                           </form>
                           <form action={recordSale} className="space-y-2 rounded-lg border border-line p-3">
-                            <p className="text-xs font-medium text-slate-300">We sold it!</p>
+                            <p className="text-xs font-medium text-slate-300">We fucking sold it!</p>
                             <input type="hidden" name="listing_id" value={l.id} />
                             <input name="sale_price" type="number" min="0" step="0.01" required className="field" defaultValue={num(l.list_price).toFixed(2)} inputMode="decimal" aria-label="Sale price" />
                             <input name="shipping_cost" type="number" min="0" step="0.01" className="field" placeholder="Label you paid $ (optional)" inputMode="decimal" />
@@ -203,7 +203,7 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
             <p className="mt-0.5 text-xs text-slate-500">Just us. Buyers never see these, so talk all the shit you want.</p>
             <div className="mt-3 space-y-3">
               <NotesList notes={comments} names={names} currentUser={ctx.userId} isAdmin={ctx.role === "admin"} showItem={false} allowPin={false} />
-              <NoteComposer itemId={item.id} placeholder="Say something about this thing…" />
+              <NoteComposer itemId={item.id} placeholder="Talk shit about this thing…" />
             </div>
           </section>
 
@@ -215,12 +215,12 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
 
         <aside className="space-y-4">
           <section className="surface p-5">
-            <h2 className="text-base font-semibold text-white">Where we&apos;d make the most</h2>
+            <h2 className="text-base font-semibold text-white">Where we&apos;d make the most fucking money</h2>
             <div className="mt-3"><FeeCalculator defaultPrice={num(item.target_price)} itemCost={cost} category={item.category} /></div>
           </section>
           {live.some(l => platformById(l.platform).postingRules.length > 0) && (
             <section className="surface p-5 text-xs leading-5 text-slate-400">
-              <p className="font-medium text-slate-200">Rules so we don&apos;t get banned</p>
+              <p className="font-medium text-slate-200">Rules so we don&apos;t get our asses banned</p>
               <ul className="mt-2 list-disc space-y-1 pl-4">
                 {live.flatMap(l => platformById(l.platform).postingRules.map(r => <li key={l.id + r}>{r}</li>))}
               </ul>

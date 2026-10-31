@@ -25,18 +25,18 @@ export default async function HomePage() {
 
       {empty && (
         <section className="surface p-6">
-          <h2 className="text-lg font-semibold text-white">Start with one room of crap</h2>
+          <h2 className="text-lg font-semibold text-white">Start with one fucking room</h2>
           <p className="mt-2 max-w-xl text-sm leading-6 text-slate-400">
-            Walk through a closet or the kids&apos; room and add every damn thing you want gone: what it is, size, condition, where it&apos;s
+            Walk through a closet or the kids&apos; room and add every fucking thing you want gone: what it is, size, condition, where it&apos;s
             hiding, and the lowest price you&apos;d take. Hit &quot;Save &amp; add more shit&quot; to bang them out fast.
           </p>
           <Link href="/inventory/new" className="btn-primary mt-4"><Plus size={16} /> Add the first piece of crap</Link>
         </section>
       )}
 
-      {/* 1. Are we rich yet? */}
+      {/* 1. Are we fucking rich yet? */}
       <section aria-labelledby="q-doing">
-        <h1 id="q-doing" className="question">Are we rich yet?</h1>
+        <h1 id="q-doing" className="question">Are we fucking rich yet?</h1>
         <div className="mt-3">
           <MonthHero thisMonth={overview.thisMonth} lastMonth={overview.lastMonth} allTime={overview.profit} sold={overview.counts.sold} />
         </div>
@@ -46,7 +46,7 @@ export default async function HomePage() {
       <section aria-labelledby="q-needs">
         <div className="flex items-baseline justify-between gap-3">
           <h2 id="q-needs" className="question">What needs our lazy asses?</h2>
-          <p className="text-sm text-slate-500">{needsCount === 0 ? "Not a damn thing" : `${needsCount} thing${needsCount === 1 ? "" : "s"}`}</p>
+          <p className="text-sm text-slate-500">{needsCount === 0 ? "Not a fucking thing" : `${needsCount} thing${needsCount === 1 ? "" : "s"}`}</p>
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2 text-sm">
@@ -120,15 +120,15 @@ export default async function HomePage() {
 
           {needsCount === 0 && !empty && (
             <div className="surface flex items-center gap-3 p-4 text-sm text-slate-400">
-              <Sparkles size={18} className="shrink-0 text-link" /> All caught up. No offers, everything&apos;s listed. Go pour yourself a drink.
+              <Sparkles size={18} className="shrink-0 text-link" /> All caught up. No offers, everything&apos;s listed. Go pour yourself a fucking drink.
             </div>
           )}
         </div>
       </section>
 
-      {/* 3. What the hell happened? */}
+      {/* 3. What the fuck happened? */}
       <section aria-labelledby="q-new">
-        <h2 id="q-new" className="question">What the hell happened?</h2>
+        <h2 id="q-new" className="question">What the fuck happened?</h2>
         <div className="mt-3 grid gap-3 lg:grid-cols-2">
           <div className="surface p-4 sm:p-5">
             <div className="flex items-center justify-between">
@@ -136,7 +136,7 @@ export default async function HomePage() {
               <Link href="/money" className="text-sm text-link hover:underline">Money</Link>
             </div>
             {overview.recentSales.length === 0 ? (
-              <p className="mt-2 text-sm text-slate-500">Nothing sold yet. The first one shows up here, fingers crossed.</p>
+              <p className="mt-2 text-sm text-slate-500">Nothing sold yet. First one shows up here, fingers fucking crossed.</p>
             ) : (
               <ul className="mt-2 divide-y divide-line">
                 {overview.recentSales.map(r => (
@@ -194,13 +194,13 @@ function describe(action: string, d: Record<string, unknown>) {
     case "listing_added": return `Listed on ${platformName(String(d.platform))}`;
     case "offer_recorded": return `Got a ${money(Number(d.amount))} offer`;
     case "offer_accepted": return `Took ${money(Number(d.amount))}`;
-    case "offer_declined": return `Said hell no to ${money(Number(d.amount))}`;
+    case "offer_declined": return `Told a ${money(Number(d.amount))} offer to fuck off`;
     case "offer_countered": return `Countered at ${money(Number(d.counter))}`;
     case "note_added": return "Posted a note";
     case "listing_drafted": return "Drafted listings" + (Array.isArray(d.platforms) ? ` for ${(d.platforms as string[]).map(platformName).join(" and ")}` : "");
     case "comment_added": return "Commented on an item";
     case "member_added": return "Added someone to the house";
-    case "sale_recorded": return `Sold on ${platformName(String(d.platform))} for ${money(Number(d.salePrice))}. Cha-ching.`;
+    case "sale_recorded": return `Sold on ${platformName(String(d.platform))} for ${money(Number(d.salePrice))}. Fuck yes.`;
     default: return action.replace(/_/g, " ");
   }
 }
@@ -222,7 +222,7 @@ function MonthHero({ thisMonth, lastMonth, allTime, sold }: { thisMonth: MonthPo
       </p>
       <p className="mt-2 text-sm text-slate-400">
         {thisMonth.sold === 0
-          ? `Nothing sold yet in ${monthName}. Get on it.`
+          ? `Nothing sold yet in ${monthName}. Get your ass in gear.`
           : `${thisMonth.sold} sold in ${monthName}. That's after fees, shipping and what we paid for the crap.`}
         {lastMonth && lastMonth.sold > 0 && (
           <> Last month: <span className={"font-semibold " + (toneOf(lastMonth.profit) === "bad" ? "text-bad" : toneOf(lastMonth.profit) === "good" ? "text-good" : "text-slate-300")}>{signedMoney(lastMonth.profit)}</span>.</>

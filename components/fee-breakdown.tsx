@@ -21,7 +21,7 @@ export function FeeBreakdown({ estimate, itemCost, compact = false }: { estimate
       </dl>
       <p className="mt-3 text-[11px] leading-4 text-slate-500">
         Rough math. {unverified ? "Fee rule not yet verified. " : estimate.rule.verifiedOn.includes("third-party") ? `Fees from third-party sources (${estimate.rule.verifiedOn.slice(0, 10)}). ` : `Fees checked ${estimate.rule.verifiedOn}. `}
-        Check the payout screen before you say yes. Fees are sneaky little shits.
+        Check the payout screen before you say yes. Fees are sneaky little fuckers.
       </p>
     </div>
   );

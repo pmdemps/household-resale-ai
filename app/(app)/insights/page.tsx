@@ -28,7 +28,7 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
     <div className="mx-auto max-w-3xl space-y-5">
       <header>
         <Link href="/money" className="text-sm text-link hover:underline">← Money</Link>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">What sells best</h1>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">What sells like fucking hotcakes</h1>
         <p className="mt-1 text-sm text-slate-400">What sells, how fast, and what actually makes money after fees, shipping and what we paid.</p>
       </header>
 
@@ -41,7 +41,7 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
       {t.sold < MIN_SALES && (
         <p className="flex gap-2 rounded-xl border border-line bg-white/[0.03] px-4 py-3 text-sm text-slate-300">
           <Lightbulb size={17} className="mt-0.5 shrink-0 text-warn" />
-          This won&apos;t mean a damn thing until we sell a few more. Rankings are guesses until a group has {MIN_SALES}+ sales.
+          This won&apos;t mean a fucking thing until we sell a few more. Rankings are guesses until a group has {MIN_SALES}+ sales.
         </p>
       )}
 
@@ -72,7 +72,7 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
 
       {top.length > 0 && (
         <section className="surface p-5">
-          <h2 className="text-base font-semibold text-white">Best damn sales</h2>
+          <h2 className="text-base font-semibold text-white">Best fucking sales</h2>
           <ul className="mt-3 divide-y divide-line">
             {top.map(i => (
               <li key={i.id}>

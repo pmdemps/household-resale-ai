@@ -87,7 +87,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
 
       {items.length === 0 ? (
         <div className="surface p-8 text-center text-sm text-slate-400">
-          Nothing here. Either we sold it all or we&apos;re slacking. <Link href="/inventory/new" className="text-link hover:underline">Add some shit</Link>
+          Nothing here. Either we sold all of it or we&apos;re fucking slacking. <Link href="/inventory/new" className="text-link hover:underline">Add some shit</Link>
         </div>
       ) : (
         <ul className="surface divide-y divide-line">

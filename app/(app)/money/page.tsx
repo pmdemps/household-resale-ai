@@ -22,7 +22,7 @@ export default async function MoneyPage() {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Money</h1>
-          <p className="mt-1 text-sm text-slate-400">Profit is what&apos;s left after fees, shipping and whatever we paid for the damn thing.</p>
+          <p className="mt-1 text-sm text-slate-400">Profit is what&apos;s left after fees, shipping and whatever we paid for the fucking thing.</p>
         </div>
         <a href="/api/export?type=sales" className="btn-secondary"><Download size={15} /> Sales CSV</a>
       </header>
@@ -68,7 +68,7 @@ export default async function MoneyPage() {
         <section className="surface p-4 sm:p-5">
           <h2 className="text-base font-semibold text-white">By platform</h2>
           {data.byPlatform.length === 0 ? (
-            <p className="mt-3 text-sm text-slate-500">Nothing listed yet. Get to it.</p>
+            <p className="mt-3 text-sm text-slate-500">Nothing listed yet. Get your ass moving.</p>
           ) : (
             <table className="mt-3 w-full text-sm">
               <thead>
@@ -98,8 +98,8 @@ export default async function MoneyPage() {
         <Link href="/insights" className="tile tile-sun flex items-center gap-4 self-start p-5 hover:brightness-[1.02]">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-accent text-on-accent"><Trophy size={22} /></span>
           <span className="min-w-0 flex-1">
-            <span className="block text-base font-semibold text-white">What sells best</span>
-            <span className="block text-sm text-slate-400">What makes us the most money, and the crap nobody wants.</span>
+            <span className="block text-base font-semibold text-white">What sells like fucking hotcakes</span>
+            <span className="block text-sm text-slate-400">What makes us the most money, and the shit nobody fucking wants.</span>
           </span>
           <ArrowRight size={18} className="shrink-0 text-link" />
         </Link>

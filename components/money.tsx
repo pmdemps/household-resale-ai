@@ -39,5 +39,5 @@ export function MoneyText({ value, className = "" }: { value: number; className?
 
 export function verdict(value: number): string {
   const t = toneOf(value);
-  return t === "good" ? "We're making bank" : t === "bad" ? "We're losing money, dammit" : "Breaking even. Meh.";
+  return t === "good" ? "We're making bank" : t === "bad" ? "We're losing fucking money" : "Breaking even. Meh.";
 }

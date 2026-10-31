@@ -287,7 +287,7 @@ export async function decideOffer(form: FormData) {
         others.map(o => ({
           household_id: ctx.household.id,
           kind: "delist",
-          title: `Pull it off ${platformName(o.platform)}, it already sold`,
+          title: `Pull it off ${platformName(o.platform)}, it already fucking sold`,
           listing_id: o.id,
           item_id: listing.item_id,
           requested_by: "system",
@@ -355,7 +355,7 @@ export async function recordSale(form: FormData) {
     .eq("item_id", listing!.item_id).neq("id", listing!.id).in("status", ["draft", "active", "paused"]);
   if (others?.length) {
     await ctx.supabase.from("agent_tasks").insert(others.map(o => ({
-      household_id: ctx.household.id, kind: "delist", title: `Pull it off ${platformName(o.platform)}, it already sold`,
+      household_id: ctx.household.id, kind: "delist", title: `Pull it off ${platformName(o.platform)}, it already fucking sold`,
       listing_id: o.id, item_id: listing!.item_id, requested_by: "system",
       detail: "Sold somewhere else. End this listing now so we don't sell the same shit twice.",
     })));

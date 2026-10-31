@@ -15,7 +15,7 @@ export default async function SetupPage() {
         <p className="eyebrow">Welcome</p>
         <h1 className="mt-2 text-2xl font-semibold text-white">Start a household</h1>
         <p className="mt-3 rounded-xl border border-warn/30 bg-warn/10 px-3 py-2.5 text-sm leading-6 text-slate-200">
-          <span className="font-semibold text-warn">Joining someone else&apos;s?</span> Don&apos;t make one here. Tell them the email you just signed up
+          <span className="font-semibold text-warn">Joining someone else&apos;s?</span> Don&apos;t fucking make one here. Tell them the email you just signed up
           with{ctx.email ? <> (<span className="font-medium text-white">{ctx.email}</span>)</> : null}. Once they add you in their Settings, sign in again and you&apos;re in.
         </p>
         <p className="mt-3 text-sm leading-6 text-slate-400">
