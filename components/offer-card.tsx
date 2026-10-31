@@ -45,35 +45,35 @@ export function OfferCard({ offer }: { offer: OfferWithContext }) {
         </div>
         <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:flex-col sm:items-end sm:gap-1">
           <p className="text-2xl font-semibold tabular-nums text-white">{money(amount)}</p>
-          <div><ProfitBadge value={atOffer.profit} label={atOffer.profit < 0 ? "you'd lose" : "you'd make"} size="md" /></div>
+          <div><ProfitBadge value={atOffer.profit} label={atOffer.profit < 0 ? "we'd lose" : "we'd make"} size="md" /></div>
         </div>
       </div>
 
       {belowFloor && (
         <p className="mt-3 flex items-center gap-2 rounded-lg border border-warn/20 bg-warn/[0.07] px-3 py-2 text-xs text-warn">
-          <AlertTriangle size={14} /> Below your floor price of {money(floor!)}.
+          <AlertTriangle size={14} /> Lowball alert. That&apos;s under our floor of {money(floor!)}. Fuck that.
         </p>
       )}
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <div>
-          <p className="mb-1.5 text-xs text-slate-400">If you accept {money(amount)}</p>
+          <p className="mb-1.5 text-xs text-slate-400">If we take {money(amount)}</p>
           <FeeBreakdown estimate={atOffer} itemCost={cost} compact />
         </div>
         <div className="hidden sm:block">
-          <p className="mb-1.5 text-xs text-slate-400">At your asking price {money(listPrice)}</p>
+          <p className="mb-1.5 text-xs text-slate-400">At full asking price {money(listPrice)}</p>
           <FeeBreakdown estimate={atList} itemCost={cost} compact />
         </div>
       </div>
       <p className="mt-2 text-xs text-slate-500 sm:hidden">
-        At your asking price you&apos;d get {money(atList.payout)} after fees ({money(atList.payout - atOffer.payout)} more).
+        At full price we&apos;d pocket {money(atList.payout)} after fees ({money(atList.payout - atOffer.payout)} more).
       </p>
 
       <div className="mt-4 flex flex-wrap gap-2">
         <form action={decideOffer}>
           <input type="hidden" name="offer_id" value={offer.id} />
           <input type="hidden" name="decision" value="accepted" />
-          <button className="btn-primary"><Check size={16} /> Accept</button>
+          <button className="btn-primary"><Check size={16} /> Take it</button>
         </form>
         <form action={decideOffer} className="flex gap-2">
           <input type="hidden" name="offer_id" value={offer.id} />
@@ -93,15 +93,15 @@ export function OfferCard({ offer }: { offer: OfferWithContext }) {
         <form action={decideOffer}>
           <input type="hidden" name="offer_id" value={offer.id} />
           <input type="hidden" name="decision" value="declined" />
-          <button className="btn-secondary"><X size={15} /> Decline</button>
+          <button className="btn-secondary"><X size={15} /> Fuck no</button>
         </form>
       </div>
       <p className="mt-2 text-[11px] text-slate-500">
         {offer.listing.platform === "ebay" && offer.external_id ? (
-          <>This offer came from eBay, so your answer is sent to eBay for you. If that fails you&apos;ll see a note in To do asking you to do it in the eBay app too.</>
+          <>This one came from eBay, so your answer goes straight to eBay. The buyer just sees a normal accept, counter or decline. If it shits the bed, a to-do shows up telling you to do it in the eBay app.</>
         ) : (
           <>
-            This records your decision here. Until the {platformName(offer.listing.platform)} integration is live, also tap the same button in the
+            This only saves it here. You still have to go tap the same damn button in the
             {" "}{platformName(offer.listing.platform)} app{offer.listing.listing_url ? <> (<a className="text-link hover:underline" href={offer.listing.listing_url} target="_blank" rel="noreferrer">open listing</a>)</> : ""}.
           </>
         )}

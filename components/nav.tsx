@@ -7,7 +7,7 @@ import { Boxes, HandCoins, Home, MessageSquareText, PiggyBank, Plus, Settings } 
 // On-screen names are plain words; routes stay as they are.
 const LINKS = [
   { href: "/", label: "Home", icon: Home },
-  { href: "/inventory", label: "Stuff", icon: Boxes },
+  { href: "/inventory", label: "My Shit", icon: Boxes },
   { href: "/offers", label: "Offers", icon: HandCoins },
   { href: "/money", label: "Money", icon: PiggyBank },
   { href: "/notes", label: "Notes", icon: MessageSquareText },
@@ -24,7 +24,7 @@ export function SideNav({ pendingCount }: { pendingCount: number }) {
   const path = usePathname();
   return (
     <nav className="mt-6 space-y-1">
-      <Link href="/inventory/new" className="btn-primary mb-4 w-full"><Plus size={17} /> Add item</Link>
+      <Link href="/inventory/new" className="btn-primary mb-4 w-full"><Plus size={17} /> Add more shit</Link>
       {LINKS.map(({ href, label, icon: Icon }) => (
         <Link
           key={href}
@@ -45,11 +45,11 @@ export function SideNav({ pendingCount }: { pendingCount: number }) {
   );
 }
 
-/** Bottom tab bar for phones: Home, Stuff, big +, Offers, Money. Notes and Settings live in the top bar. */
+/** Bottom tab bar for phones: Home, My Shit, big +, Offers, Money. Notes and Settings live in the top bar. */
 export function BottomNav({ pendingCount }: { pendingCount: number }) {
   const path = usePathname();
   const pick = (href: string) => LINKS.find(l => l.href === href)!;
-  const items = [pick("/"), pick("/inventory"), { href: "/inventory/new", label: "Add item", icon: Plus }, pick("/offers"), pick("/money")];
+  const items = [pick("/"), pick("/inventory"), { href: "/inventory/new", label: "Add shit", icon: Plus }, pick("/offers"), pick("/money")];
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-panel pb-[env(safe-area-inset-bottom)] lg:hidden" aria-label="Main">
       <div className="mx-auto grid max-w-md grid-cols-5">
@@ -70,7 +70,7 @@ export function BottomNav({ pendingCount }: { pendingCount: number }) {
               )}
               {href !== "/inventory/new" && label}
               {href === "/offers" && pendingCount > 0 && (
-                <span className="absolute right-[24%] top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-bad px-1 text-[10px] font-bold text-panel" aria-label={`${pendingCount} waiting`}>{pendingCount}</span>
+                <span className="absolute right-[24%] top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-bad px-1 text-[10px] font-bold text-panel" aria-label={`${pendingCount} waiting on you`}>{pendingCount}</span>
               )}
             </Link>
           );

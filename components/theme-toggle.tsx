@@ -23,7 +23,7 @@ export function ThemePicker({ initial }: { initial: ThemeChoice }) {
   const [choice, set] = useTheme(initial);
   const opts: { id: ThemeChoice; label: string; icon: typeof Sun }[] = [
     { id: "light", label: "Sunflower", icon: Sun },
-    { id: "dark", label: "Dark", icon: Moon },
+    { id: "dark", label: "Make it rain", icon: Moon },
     { id: "system", label: "Match device", icon: Monitor },
   ];
   return (
@@ -63,8 +63,8 @@ export function ThemeQuickToggle({ initial }: { initial: ThemeChoice }) {
       type="button"
       onClick={() => set(isLight ? "dark" : "light")}
       className="rounded-xl p-2 text-slate-400 hover:bg-white/[0.06] hover:text-white"
-      aria-label={isLight ? "Switch to dark mode" : "Switch to sunflower mode"}
-      title={isLight ? "Dark mode" : "Sunflower mode"}
+      aria-label={isLight ? "Switch to dark mode (it rains money)" : "Switch to sunflower mode"}
+      title={isLight ? "Make it rain" : "Sunflower mode"}
     >
       {isLight ? <Moon size={19} /> : <Sun size={19} />}
     </button>

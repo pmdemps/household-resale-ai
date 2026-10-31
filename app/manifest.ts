@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Resale HQ",
     short_name: "Resale HQ",
-    description: "Household resale tracker: inventory, offers, profit and notes.",
+    description: "Selling our shit, one thing at a time: what we've got, offers, profit and notes.",
     start_url: "/",
     display: "standalone",
     background_color: "#141416",

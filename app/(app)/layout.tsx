@@ -37,12 +37,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </Link>
         <SideNav pendingCount={pending} />
         <div className="mt-auto flex items-center justify-between px-1">
-          <span className="text-xs text-slate-500">Look</span>
+          <span className="text-xs text-slate-500">Vibe</span>
           <ThemeQuickToggle initial={theme} />
         </div>
         <form action={signOut} className="mt-2">
           <button className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-slate-500 hover:bg-white/[0.04] hover:text-white">
-            <LogOut size={16} /> Sign out
+            <LogOut size={16} /> Peace the fuck out
           </button>
         </form>
       </aside>

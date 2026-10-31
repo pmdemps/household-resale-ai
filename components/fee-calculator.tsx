@@ -23,7 +23,7 @@ export function FeeCalculator({ defaultPrice, itemCost, category }: { defaultPri
           <input className="field mt-1.5" type="number" min="0" step="0.01" inputMode="decimal" value={price} onChange={e => setPrice(e.target.value)} />
         </label>
         <label className="text-xs text-slate-300">
-          Label you&apos;d pay ($)
+          Label we&apos;d pay ($)
           <input className="field mt-1.5" type="number" min="0" step="0.01" inputMode="decimal" value={label} onChange={e => setLabel(e.target.value)} placeholder="0 if buyer pays" />
         </label>
       </div>
@@ -32,7 +32,7 @@ export function FeeCalculator({ defaultPrice, itemCost, category }: { defaultPri
           <tr className="text-left text-xs text-slate-500">
             <th className="pb-2 font-normal">Platform</th>
             <th className="pb-2 text-right font-normal">Fees</th>
-            <th className="pb-2 text-right font-normal">You get</th>
+            <th className="pb-2 text-right font-normal">We get</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-line">

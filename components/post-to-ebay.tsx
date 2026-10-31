@@ -57,7 +57,7 @@ export async function PostToEbay({ item, listings, hasEbayConnection, photoCount
               <a href={live.listing_url} target="_blank" rel="noreferrer" className="ml-2 inline-flex items-center gap-1 text-xs text-link hover:underline">Open on eBay <ExternalLink size={12} /></a>
             )}
           </p>
-          <p className="text-xs text-slate-500">You&apos;d keep about {money(est.payout)} after eBay fees{floor !== null ? ` · offers under ${money(floor)} are auto-declined` : ""}.</p>
+          <p className="text-xs text-slate-500">We&apos;d keep about {money(est.payout)} after eBay fees{floor !== null ? ` · offers under ${money(floor)} are auto-declined` : ""}.</p>
           {live.external_offer_id ? (
             <div className="flex flex-wrap items-end gap-2">
               <form action={updateEbayPrice} className="flex items-end gap-2">
@@ -91,9 +91,9 @@ export async function PostToEbay({ item, listings, hasEbayConnection, photoCount
           </div>
           <ul className="space-y-1 text-[11px] leading-4 text-slate-500">
             <li>Best Offer on{floor !== null ? <>; offers under <span className="text-slate-300">{money(floor)}</span> (your floor) are declined automatically</> : ". Set a floor price to auto-decline lowballs"}.</li>
-            <li>You&apos;d keep about <span className="text-slate-300">{money(est.payout)}</span> at {money(price)} (fees ≈ {money(est.totalFees)}{cost > 0 ? `, profit ≈ ${money(est.profit)}` : ""}).</li>
-            <li>{photoCount === 0 ? <span className="text-warn">Add at least one photo first — eBay won&apos;t publish without a picture.</span> : `${photoCount} photo${photoCount === 1 ? "" : "s"} will be sent (HEIC skipped).`}</li>
-            <li>Fixed price, Good &apos;Til Cancelled, ships from your saved location. Your notes and comments are never sent.</li>
+            <li>We&apos;d keep about <span className="text-slate-300">{money(est.payout)}</span> at {money(price)} (fees ≈ {money(est.totalFees)}{cost > 0 ? `, profit ≈ ${money(est.profit)}` : ""}).</li>
+            <li>{photoCount === 0 ? <span className="text-warn">Add a photo first. eBay won&apos;t post it without one, and nobody buys shit they can&apos;t see.</span> : `${photoCount} photo${photoCount === 1 ? "" : "s"} will be sent (HEIC skipped).`}</li>
+            <li>Fixed price, Good &apos;Til Cancelled, ships from your saved location. Our notes and comments never get sent, so talk all the shit you want.</li>
           </ul>
         </form>
       )}

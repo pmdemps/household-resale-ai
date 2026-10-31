@@ -4,8 +4,8 @@ import { THEME_COOKIE, parseTheme } from "@/lib/theme";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Resale HQ | Household Resale AI",
-  description: "A smarter home base for resale inventory, sourcing, listings, and profit.",
+  title: "Resale HQ | Selling our shit",
+  description: "Where we sell all our crap: what we've got, who wants it, and what we made.",
   appleWebApp: { capable: true, title: "Resale HQ", statusBarStyle: "default" },
   robots: { index: false, follow: false },
 };

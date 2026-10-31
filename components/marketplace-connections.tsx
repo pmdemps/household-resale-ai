@@ -27,7 +27,7 @@ export async function MarketplaceConnections({ ctx }: Props) {
   return (
     <section className="surface p-5">
       <h2 className="text-base font-semibold text-white">Connected marketplaces</h2>
-      <p className="mt-1 text-sm text-slate-400">Sign in once; Resale HQ posts listings and watches offers. Nothing is accepted or declined without you.</p>
+      <p className="mt-1 text-sm text-slate-400">Sign in once and Resale HQ posts listings and keeps an eye on offers. Nothing gets accepted or declined until one of us says so.</p>
 
       {notice && (
         <p className={`mt-3 rounded-lg border px-3 py-2 text-sm ${notice.kind === "ok" ? "border-good/30 bg-good/10 text-good" : "border-warn/30 bg-warn/10 text-warn"}`}>{notice.message}</p>
