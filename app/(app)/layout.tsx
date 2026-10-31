@@ -7,6 +7,7 @@ import { cookies } from "next/headers";
 import { ThemeQuickToggle } from "@/components/theme-toggle";
 import { SunflowerCorner } from "@/components/sunflower";
 import { CashRain } from "@/components/cash-rain";
+import { AppBadge } from "@/components/app-badge";
 import { THEME_COOKIE, parseTheme } from "@/lib/theme";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +28,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="mx-auto flex min-h-screen max-w-[1500px]">
       <SunflowerCorner />
       <CashRain />
+      <AppBadge count={pending} />
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-line px-4 py-6 lg:flex">
         <Link href="/" className="flex items-center gap-3 px-2">
           <Logo size={40} />

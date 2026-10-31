@@ -205,6 +205,8 @@ function describe(action: string, d: Record<string, unknown>) {
     case "task_done": return `Knocked out "${String(d.title ?? "a to-do")}"`;
     case "assistant_key_created": return `Gave ${String(d.label ?? "an AI sidekick")} a key`;
     case "assistant_key_revoked": return `Cut off ${String(d.label ?? "an AI sidekick")}'s key`;
+    case "push_enabled": return `Turned on buzzes for their ${String(d.device ?? "phone")}`;
+    case "push_disabled": return `Turned off buzzes for their ${String(d.device ?? "phone")}`;
     default: return action.replace(/_/g, " ");
   }
 }
