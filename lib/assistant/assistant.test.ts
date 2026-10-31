@@ -181,5 +181,6 @@ test("database errors map to HTTP answers the assistant can act on", () => {
   assert.match(floor.hint ?? "", /override_floor/);
   assert.equal(mapDbError({ code: "22023", message: "A counter needs an amount above zero" }).status, 400);
   assert.equal(mapDbError({ code: "42501", message: "permission denied for function assistant_inbox" }).code, "misconfigured");
+  assert.equal(mapDbError({ code: "PGRST202", message: "Could not find the function public.assistant_inbox" }).code, "misconfigured", "migration not applied yet");
   assert.equal(mapDbError(null).status, 500);
 });

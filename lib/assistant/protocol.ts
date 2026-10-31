@@ -333,8 +333,11 @@ export function mapDbError(err: { code?: string | null; message?: string | null 
     case "22P02":
     case "23514":
       return { status: 400, code: "bad_request", error: message };
-    case "42501":
-      return { status: 500, code: "misconfigured", error: "The database did not allow this call. The app's migrations may not be applied." };
+    case "42501": // permission denied
+    case "42883": // undefined function
+    case "42P01": // undefined table
+    case "PGRST202": // PostgREST: function not found in schema cache
+      return { status: 500, code: "misconfigured", error: "The database is missing the assistant functions. The app's migrations (supabase/migrations) have not all been applied; tell a household member." };
     default:
       return { status: 500, code: "error", error: message };
   }
