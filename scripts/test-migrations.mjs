@@ -668,5 +668,19 @@ check((await as(A, "select count(*)::int as n from public.item_platform_gaps whe
   await expectError(() => asAnon("select public.assistant_item($1, $2)", ["rhq_" + "x".repeat(43), itemS]), "a bad key gets nothing", /Invalid assistant key|not valid/);
 }
 
+// Every assistant_* function checks its key with assistant_resolve_key, which writes last_used_at. PostgREST runs
+// STABLE/IMMUTABLE functions read-only, so any non-VOLATILE one fails live with "cannot execute UPDATE in a
+// read-only transaction" (bug found in 20261101040000). Guard against it for all of them, present and future.
+{
+  const nonVolatile = (await db.query(`select proname, provolatile from pg_proc where pronamespace = 'public'::regnamespace and proname like 'assistant\\_%' and provolatile <> 'v'`)).rows;
+  check(nonVolatile.length === 0, `every assistant_* function is VOLATILE${nonVolatile.length ? " (not: " + nonVolatile.map(r => r.proname).join(", ") + ")" : ""}`);
+  // Reproduce the live failure: inside a read-only transaction a key-checked lookup must fail, and the app never calls one that way.
+  await db.exec("begin transaction read only");
+  let readOnlyFails = false;
+  try { await db.query("select public.assistant_find_items($1, 'nike')", [token2]); } catch (e) { readOnlyFails = /read-only/.test(String(e?.message)); }
+  await db.exec("rollback");
+  check(readOnlyFails, "a key check needs a writable transaction (why lookups can't be STABLE)");
+}
+
 console.log(failures ? `${failures} FAILED` : "ALL PASSED");
 process.exit(failures ? 1 : 0);
