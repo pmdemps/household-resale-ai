@@ -69,7 +69,7 @@ export const MAX_SEPARATE = 3;
 const HEADINGS: Record<string, string> = {
   offer_decision: "Somebody wants our shit",
   message_reply: "A buyer's hitting us up",
-  delist: "Sold! Pull the other listings",
+  delist: "Pull a listing down",
   price_change: "Price check",
   listing_draft: "A listing's ready to look at",
   relist: "Time to relist some shit",
