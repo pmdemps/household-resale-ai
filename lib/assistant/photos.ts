@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import sharp from "sharp";
 import { MAX_PHOTO_EDGE, PHOTO_BUCKET, photoStoragePath, sniffImageType } from "@/lib/photo-url";
 import { publicPhotoUrl } from "@/lib/photos";
-import { createServiceClient } from "@/lib/supabase/service";
+import { createServiceClient, serviceKeyConfigProblem } from "@/lib/supabase/service";
 import { checkImageUrl, MAX_ASSISTANT_PHOTO_BYTES, type RecordPhotoResult } from "./protocol";
 import { AssistantApiError, callAssistantFunction } from "./server";
 
@@ -33,6 +33,11 @@ const NO_DOWNLOAD = "Couldn't download the photo from that link (it timed out or
 
 /** Key check, household and room for another photo, before anything is fetched or written. */
 export async function reservePhotoSlot(key: string, itemId: string): Promise<PhotoSlot> {
+  const keyProblem = serviceKeyConfigProblem();
+  if (keyProblem) {
+    console.error("[assistant/photos]", keyProblem);
+    bad(`Photo uploads are switched on but the server's key is pasted wrong: ${keyProblem} Tell the household to fix it in Vercel and redeploy.`, 503, "photos_misconfigured");
+  }
   if (!createServiceClient()) bad("Photo uploads aren't switched on yet: the server needs SUPABASE_SERVICE_ROLE_KEY. Tell the household to add it in Vercel.", 503, "photos_not_configured");
   return callAssistantFunction<PhotoSlot>("assistant_photo_slot", { p_key: key, p_item_id: itemId });
 }
