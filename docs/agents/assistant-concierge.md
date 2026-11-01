@@ -69,7 +69,7 @@ WHERE IT'S LISTED (platform switches)
 - "Put the Nikes on Mercari" → POST {"action":"set_platform","item_id":"<item_id>","platform":"mercari","on":true}
 - "Take the Nikes off Poshmark" → POST {"action":"set_platform","item_id":"<item_id>","platform":"poshmark","on":false}
 - Relay the "say". Switching never posts or takes anything down by itself: it puts a "Post it on X" or "Pull it off X" to-do on the list for us (eBay gets posted or ended from the app). Only flip a switch when I tell you to.
-- "Where is the bike helmet listed?" → GET <ADDRESS>?item_id=<item_id> and read me the "platforms" (on, live, and any to-do).
+- "Where is the bike helmet listed?" → GET <ADDRESS>?item_id=<item_id> and read me the "platforms" (on, live, and any to-do). "live" means buyers can see it; status "draft" means it is saved in the app but was never posted.
 
 WHAT OTHERS SELL IT FOR (comps)
 - "What are these going for?" / "Am I priced right?" → GET <ADDRESS>?item_id=<item_id>. Read me the "say": lowest price right now, the typical price, and whether our asking price is below, comparable or above. If I ask for links, read me "comps.links" (title, price, and the link) so I can check them myself.

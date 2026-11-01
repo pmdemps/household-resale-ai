@@ -232,7 +232,7 @@ test("offers say whose thing it is and who was asked", () => {
 });
 
 // --- Platform switches and comps for the assistant ------------------------------------------------
-import { buildItemDetail, normalizePlatformWord, setPlatformSay, type ItemDetailRow } from "./protocol.ts";
+import { buildItemDetail, itemDetailSay, normalizePlatformWord, setPlatformSay, type ItemDetailRow } from "./protocol.ts";
 
 const ITEM = "11111111-2222-3333-4444-555555555555";
 
@@ -289,4 +289,25 @@ test("item detail: switches, comps verdict with closest links, paste-ready text"
   assert.deepEqual(d.comps.links.map(l => l.price), [38, 42, 45]);
   assert.ok(d.listing_text.mercari && d.listing_text.offerup && !d.listing_text.thredup);
   assert.equal(d.photos[0], "https://cdn.example/h/i/a.jpg");
+});
+
+test("a saved draft is not live, and the reply says so", () => {
+  const row: ItemDetailRow = {
+    item: { item_id: ITEM, name: "Helmet mount", status: "draft", category: "Other", brand: null, size: null, condition: "New without tags", asking: 39.99, floor_price: 25, purchase_cost: 2, owner: null },
+    switches: {},
+    listings: [
+      { listing_id: "E", platform: "ebay", status: "draft", list_price: 39.99, url: null },
+      { listing_id: "T", platform: "etsy", status: "active", list_price: 39.99, url: "https://www.etsy.com/listing/1" },
+    ],
+    pending_platform_todos: [],
+    comps: [],
+    photo_paths: [],
+  };
+  const d = buildItemDetail(row, p => p);
+  const ebay = d.platforms.find(p => p.platform === "ebay")!;
+  assert.equal(ebay.on, true, "a draft row still counts as switched on");
+  assert.equal(ebay.live, false);
+  assert.equal(ebay.status, "draft");
+  assert.equal(d.platforms.find(p => p.platform === "etsy")!.live, true);
+  assert.match(itemDetailSay(d), /eBay \(draft, not posted yet\)/);
 });

@@ -507,7 +507,8 @@ export type ItemDetailRow = {
 
 export type ItemDetail = {
   item: ItemDetailRow["item"];
-  platforms: { platform: string; platform_name: string; on: boolean; live: boolean; listing_id: string | null; list_price: number | null; url: string | null; todo: string | null }[];
+  /** status: the listing row's status ("draft", "active", "paused"), or null when there is none. live = active or paused. */
+  platforms: { platform: string; platform_name: string; on: boolean; live: boolean; status: string | null; listing_id: string | null; list_price: number | null; url: string | null; todo: string | null }[];
   comps: {
     count: number;
     lowest: { title: string; price: number; shipping: number | null; platform: string; url: string | null } | null;
@@ -532,7 +533,9 @@ export function buildItemDetail(row: ItemDetailRow, photoUrl: (path: string) => 
   const platforms = (SWITCH_PLATFORMS as readonly string[]).map(p => {
     const l = liveBy.get(p) ?? null;
     const on = p in row.switches ? row.switches[p] : Boolean(l);
-    return { platform: p, platform_name: platformName(p), on, live: Boolean(l), listing_id: l?.listing_id ?? null, list_price: l ? num(l.list_price) : null, url: l?.url ?? null, todo: todoBy.get(p) ?? null };
+    // "live" means buyers can see it (active or paused); a saved draft that never went up is not live.
+    const live = Boolean(l) && l!.status !== "draft";
+    return { platform: p, platform_name: platformName(p), on, live, status: l?.status ?? null, listing_id: l?.listing_id ?? null, list_price: l ? num(l.list_price) : null, url: l?.url ?? null, todo: todoBy.get(p) ?? null };
   });
 
   const comps = row.comps.map(c => ({ ...c, price: num(c.price), shipping: c.shipping === null ? null : num(c.shipping) }));
@@ -571,7 +574,7 @@ export function buildItemDetail(row: ItemDetailRow, photoUrl: (path: string) => 
 }
 
 export function itemDetailSay(d: ItemDetail): string {
-  const on = d.platforms.filter(p => p.on).map(p => p.platform_name + (p.live ? "" : " (not up yet)"));
+  const on = d.platforms.filter(p => p.on).map(p => p.platform_name + (p.live ? "" : p.status === "draft" ? " (draft, not posted yet)" : " (not up yet)"));
   const where = on.length ? `Switched on: ${on.join(", ")}.` : "Not switched on anywhere yet.";
   if (d.comps.count === 0) return `${d.item.name}: ${where} No comps recorded yet; search for similar listings and send them with add_comp.`;
   const low = d.comps.lowest ? ` Lowest right now is ${money(d.comps.lowest.price)}${d.comps.lowest.platform ? ` on ${platformName(d.comps.lowest.platform)}` : ""}.` : "";
