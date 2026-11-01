@@ -395,7 +395,7 @@ export function parseAction(body: unknown): AssistantAction {
         brand: str(b.brand, 120), size: str(b.size, 60),
         condition: normalizeCondition(b.condition),
         asking, floor, cost: optAmount(b.cost ?? b.purchase_cost, "cost") ?? 0,
-        notes: str(b.notes ?? b.description, 4000),
+        notes: joinNotes(str(b.notes ?? b.description, 4000), normalizeCondition(b.condition) === null ? str(b.condition, 200) : null),
       };
     }
     case "add_photo": {
@@ -615,18 +615,25 @@ export function normalizeCategory(v: unknown): string {
   if (!w) return "Other";
   const exact = CATEGORIES.find(c => c.toLowerCase() === w);
   if (exact) return exact;
+  if (w.length < 3) return "Other";
   const starts = CATEGORIES.find(c => c.toLowerCase().startsWith(w) || w.startsWith(c.toLowerCase().split(/[ &]/)[0]));
   return starts ?? "Other";
 }
 
-/** Matches a condition the app knows ("nwt" -> "New with tags", "used" -> "Good"); unknown stays as written. */
+/** Matches a condition the app knows ("nwt" -> "New with tags", "used" -> "Good"); anything else is null (it goes to notes). */
 export function normalizeCondition(v: unknown): string | null {
   const w = String(v ?? "").trim();
   if (!w) return null;
   const l = w.toLowerCase();
   const alias: Record<string, string> = { nwt: "New with tags", nwot: "New without tags", new: "New without tags", "like-new": "Like new", used: "Good", "for parts": "For parts" };
   if (alias[l]) return alias[l];
-  return CONDITIONS.find(c => c.toLowerCase() === l) ?? w.slice(0, 60);
+  return CONDITIONS.find(c => c.toLowerCase() === l) ?? null;
+}
+
+function joinNotes(notes: string | null, conditionWords: string | null): string | null {
+  if (!conditionWords) return notes;
+  const line = `Condition (as described): ${conditionWords}`;
+  return notes ? `${notes}\n${line}` : line;
 }
 
 /** Largest photo the server downloads or accepts (the item-photos bucket's own limit). */
@@ -640,7 +647,8 @@ export function checkImageUrl(raw: string): { ok: true; url: string } | { ok: fa
   try { u = new URL(raw.trim()); } catch { return { ok: false, reason: "image_url isn't a valid link." }; }
   if (u.protocol !== "https:") return { ok: false, reason: "image_url must start with https://" };
   if (u.username || u.password) return { ok: false, reason: "image_url can't contain a username or password." };
-  if (PRIVATE_HOST.test(u.hostname) || /^\d+\.\d+\.\d+\.\d+$/.test(u.hostname)) return { ok: false, reason: "image_url must be a public web address, not an IP or local address." };
+  const host = u.hostname.replace(/\.+$/, "");
+  if (!host || !host.includes(".") || PRIVATE_HOST.test(host) || /^\d+\.\d+\.\d+\.\d+$/.test(host) || /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(host)) return { ok: false, reason: "image_url must be a public web address, not an IP or local address." };
   return { ok: true, url: u.toString() };
 }
 

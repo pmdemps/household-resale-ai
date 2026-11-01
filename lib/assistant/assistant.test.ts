@@ -346,3 +346,20 @@ test("item and photo replies are plain and clean", () => {
   assert.match(photoSay({ photo_id: "p", item_id: ITEM, position: 0, photo_count: 1, storage_path: "x" }), /cover photo/);
   assert.match(photoSay({ photo_id: "p", item_id: ITEM, position: 2, photo_count: 3, storage_path: "x" }), /photo 3/);
 });
+
+test("review fixes: link rules, category and condition handling", async () => {
+  for (const bad of ["https://localhost./a.jpg", "https://foo.internal./a.jpg", "https://100.64.0.1/a.jpg", "https://intranet/a.jpg"]) {
+    assert.equal(checkImageUrl(bad).ok, false, bad);
+  }
+  assert.equal(checkImageUrl("https://example.com./a.jpg").ok, true, "a trailing dot on a public host is still fine");
+  assert.equal(normalizeCategory("c"), "Other", "one letter is not enough to guess a category");
+  assert.equal(normalizeCondition("scuffed on the toe"), null);
+  const a = parseAction({ action: "add_item", name: "Boots", condition: "scuffed on the toe", notes: "size 10" }) as { condition: string | null; notes: string };
+  assert.equal(a.condition, null);
+  assert.match(a.notes, /size 10\nCondition \(as described\): scuffed on the toe/);
+  // The SQL whitelist in the migration must match the app's lists.
+  const { readFileSync } = await import("node:fs");
+  const { CATEGORIES, CONDITIONS } = await import("../types.ts");
+  const sql = readFileSync(new URL("../../supabase/migrations/20261101060000_assistant_items_photos.sql", import.meta.url), "utf8");
+  for (const c of [...CATEGORIES, ...CONDITIONS]) assert.ok(sql.includes(`'${c.replace(/'/g, "''")}'`), `SQL list has ${c}`);
+});

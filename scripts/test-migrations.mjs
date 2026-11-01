@@ -677,6 +677,15 @@ check((await as(A, "select count(*)::int as n from public.item_platform_gaps whe
   const again = (await asAnon("select public.assistant_add_item($1, 'carhartt WORK boots') as v", [token2])).rows[0].v;
   check(again.duplicate === true && again.item_id === made.item_id, "the same name again within 10 minutes returns the same item");
   await expectError(() => asAnon("select public.assistant_add_item($1, 'x', 'Other', null, null, null, 10, 20)", [token2]), "floor above asking is refused", /floor price is above/);
+  const odd = (await asAnon("select public.assistant_add_item($1, 'Odd thing', 'shit pile', null, null, 'meh') as v", [token2])).rows[0].v;
+  const oddRow = (await db.query("select category, condition from public.inventory_items where id = $1", [odd.item_id])).rows[0];
+  check(oddRow.category === "Other" && oddRow.condition === null, "unknown category and condition are not stored as-is");
+  // The other member's assistant, also labeled "muse", adding the same name gets its own item.
+  const tokenB = "rhq_" + "b".repeat(43);
+  await as(B, "insert into public.assistant_keys (household_id, user_id, label, key_hash, key_prefix) values ($1, $2, 'muse', $3, $4)",
+    [hA, B, createHash("sha256").update(tokenB, "utf8").digest("hex"), tokenB.slice(0, 12)]);
+  const theirs = (await asAnon("select public.assistant_add_item($1, 'Carhartt work boots') as v", [tokenB])).rows[0].v;
+  check(theirs.duplicate === false && theirs.item_id !== made.item_id, "the duplicate guard is per member, not per assistant label");
 
   const slot = (await asAnon("select public.assistant_photo_slot($1, $2) as v", [token2, made.item_id])).rows[0].v;
   check(slot.household_id === hA && slot.count === 0, "photo slot returns the key's household for the item");

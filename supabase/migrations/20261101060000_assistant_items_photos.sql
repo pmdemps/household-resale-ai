@@ -44,10 +44,12 @@ begin
     raise exception 'The floor price is above the asking price.' using errcode = '22023';
   end if;
 
+  -- Serialise same-name adds in this household so two identical requests can't both miss the check below.
+  perform pg_advisory_xact_lock(hashtext(k.household_id::text || '|' || lower(v_name)));
   select a.entity_id into v_id
     from public.activity_log a
     join public.inventory_items i on i.id = a.entity_id
-   where a.household_id = k.household_id and a.action = 'item_added' and a.actor_agent = k.label
+   where a.household_id = k.household_id and a.action = 'item_added' and a.actor_agent = k.label and a.actor_user = k.user_id
      and a.created_at > now() - interval '10 minutes' and lower(i.name) = lower(v_name)
    order by a.created_at desc
    limit 1;
@@ -56,9 +58,11 @@ begin
   end if;
 
   insert into public.inventory_items (household_id, created_by, name, category, brand, size, condition, target_price, floor_price, purchase_cost, notes, status, source)
-  values (k.household_id, k.user_id, v_name, left(coalesce(nullif(trim(p_category), ''), 'Other'), 60),
+  values (k.household_id, k.user_id, v_name,
+          -- Stored values stay within the app's lists (lib/types.ts CATEGORIES / CONDITIONS).
+          case when p_category in ('Clothing', 'Shoes', 'Toys & games', 'Kids & baby', 'Home & kitchen', 'Electronics', 'Tools', 'Books & media', 'Collectibles', 'Other') then p_category else 'Other' end,
           nullif(left(trim(coalesce(p_brand, '')), 120), ''), nullif(left(trim(coalesce(p_size, '')), 60), ''),
-          nullif(left(trim(coalesce(p_condition, '')), 60), ''), coalesce(p_asking, 0), p_floor, coalesce(p_cost, 0),
+          case when p_condition in ('New with tags', 'New without tags', 'Like new', 'Good', 'Fair', 'For parts') then p_condition end, coalesce(p_asking, 0), p_floor, coalesce(p_cost, 0),
           nullif(left(trim(coalesce(p_notes, '')), 4000), ''), 'draft', 'assistant')
   returning id into v_id;
 

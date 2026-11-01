@@ -27,7 +27,7 @@ import {
   type SaleResult,
 } from "@/lib/assistant/protocol";
 import { AssistantApiError, callAssistantFunction } from "@/lib/assistant/server";
-import { downloadImage, storeAssistantPhoto } from "@/lib/assistant/photos";
+import { downloadImage, reservePhotoSlot, storeAssistantPhoto } from "@/lib/assistant/photos";
 import { isEbayConfigured } from "@/lib/ebay/config";
 import { respondToEbayOfferDecision } from "@/lib/ebay/respond";
 import { estimateFees } from "@/lib/fees";
@@ -197,8 +197,9 @@ export async function POST(request: NextRequest) {
         return json({ ok: true, say: addItemSay(r), result: r });
       }
       case "add_photo": {
+        const slot = await reservePhotoSlot(key, action.item_id); // key check before anything is fetched
         const bytes = await downloadImage(action.image_url);
-        const r = await storeAssistantPhoto(key, action.item_id, bytes);
+        const r = await storeAssistantPhoto(key, slot, bytes);
         return json({ ok: true, say: photoSay(r), result: r });
       }
       case "add_comp": {
@@ -297,16 +298,18 @@ async function recordSale(key: string, a: Extract<AssistantAction, { action: "re
 /** multipart/form-data upload: action=add_photo, item_id, file. Kept under Vercel's ~4.5 MB request cap by the sender. */
 async function uploadPhoto(key: string, request: NextRequest) {
   try {
+    if (Number(request.headers.get("content-length") ?? "0") > 5 * 1024 * 1024) throw new BadRequest("That upload is too big. Keep each photo under 4 MB, or send a link instead.");
     let form: FormData;
     try { form = await request.formData(); } catch { throw new BadRequest("Couldn't read the upload. Send multipart/form-data with action, item_id and file."); }
     const action = String(form.get("action") ?? "add_photo");
     if (action !== "add_photo") throw new BadRequest("File uploads are only for action add_photo.");
     const itemId = String(form.get("item_id") ?? "").trim().toLowerCase();
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(itemId)) throw new BadRequest("item_id must be an id from add_item, find or listings (a UUID).");
+    const slot = await reservePhotoSlot(key, itemId); // key check before the file is read or decoded
     const file = form.get("file") ?? form.get("photo") ?? form.get("image");
     if (!file || typeof file === "string") throw new BadRequest("Attach the photo in a field called \"file\".");
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const r = await storeAssistantPhoto(key, itemId, bytes);
+    const r = await storeAssistantPhoto(key, slot, bytes);
     return json({ ok: true, say: photoSay(r), result: r });
   } catch (e) {
     return failure(e);
