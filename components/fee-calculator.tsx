@@ -11,7 +11,7 @@ export function FeeCalculator({ defaultPrice, itemCost, category }: { defaultPri
   const [label, setLabel] = useState("");
   const p = Number(price) || 0;
   const ship = Number(label) || 0;
-  const rows = PLATFORMS.filter(x => x.id !== "other")
+  const rows = PLATFORMS.filter(x => x.id !== "other" && !x.consignment)
     .map(pl => ({ pl, e: estimateFees(pl.id, p, { itemCost, sellerShippingCost: pl.id === "vinted" || pl.id === "poshmark" ? 0 : ship, includeListingFee: true }) }))
     .sort((a, b) => b.e.payout - a.e.payout);
 

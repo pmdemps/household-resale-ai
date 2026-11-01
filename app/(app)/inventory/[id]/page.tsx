@@ -12,6 +12,7 @@ import { estimateFees } from "@/lib/fees";
 import { requireHousehold } from "@/lib/household";
 import { loadPhotos } from "@/lib/photos";
 import { PostToEbay } from "@/components/post-to-ebay";
+import { PostItOurselves } from "@/components/post-it-ourselves";
 import { isUsableConnection, loadEbayConnection } from "@/lib/ebay/connection";
 import { PLATFORMS, platformById, platformName } from "@/lib/platforms";
 import { loadMemberNames, loadMembers, loadNotes, loadPendingOffers } from "@/lib/queries";
@@ -110,6 +111,14 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
       <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
         <div className="space-y-6">
           <PostToEbay item={item} listings={listings} hasEbayConnection={isUsableConnection(ebayConn)} photoCount={photos.length} />
+
+          {!isSold && (
+            <PostItOurselves
+              item={{ id: item.id, name: item.name, category: item.category, brand: item.brand, size: item.size, condition: item.condition, target_price: num(item.target_price) }}
+              livePlatforms={[...livePlatforms]}
+              photoUrls={photos.map(p => p.url)}
+            />
+          )}
 
           <section className="surface p-5">
             <h2 className="text-base font-semibold text-white">Listed on</h2>
