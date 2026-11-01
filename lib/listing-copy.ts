@@ -103,7 +103,7 @@ export function buildListingCopy(platform: string, item: CopyItem): ListingCopy 
         tips,
       };
     case "offerup":
-      tips.push("Choose local pickup for big or heavy things. Local sales have no OfferUp fee.");
+      tips.push("Choose local pickup for big or heavy things. Local sales have no OfferUp fee.", "If the website says \"update your app\", post from the OfferUp phone app instead.");
       return {
         title,
         description: [clean(item.name) + ".", ...details, "", "Local pickup. Message me with any questions."].join("\n"),
