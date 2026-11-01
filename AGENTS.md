@@ -41,6 +41,10 @@ These apply to any agent that reads or acts on marketplaces, email, or the house
 | Etsy | Only vintage (20+ years), handmade, or craft supplies. Used modern clothing, shoes, toys, and household goods are not allowed. |
 | eBay | Official APIs only. Best Offer on, auto-decline below floor price. |
 | Poshmark, Mercari | No public API; terms prohibit automation. Email tracking plus manual action only. |
+| OfferUp | No public API. A human posts; the app writes the text ("Post it ourselves"). Local pickup in public places. |
+| ThredUp | Consignment, not a marketplace. A human bags and ships clothes; record the bag as a $0 listing, then the payout as the sale. |
+
+For every platform without an API, `components/post-it-ourselves.tsx` (item page) writes copy-ready, clean listing text with `lib/listing-copy.ts` and links to the platform's own sell page (`sellUrl` in `lib/platforms.ts`). Agents never fill in those sites' forms or post there on their own.
 
 ## App voice
 
@@ -79,8 +83,10 @@ The two people using this app asked for it to talk the way they do: casual, funn
 - `components/marketplace-connections.tsx` (Settings) and `components/post-to-ebay.tsx` (item page) are the eBay UI
 - Phone notifications (web push): migration `20261031010000_push_notifications.sql` queues every new pending to-do (`push_queue`) and has `pg_net` POST to `app/api/push/dispatch`, which sends with `web-push` (`lib/push/send.ts`). Notification wording and input checks in `lib/push/notify.ts` (tested); the Settings card is `components/push-notifications.tsx` + `components/push-toggle.tsx` with `app/push-actions.ts`; the service worker is `public/sw.js`; `components/app-badge.tsx` keeps the app-icon number. No env vars: VAPID keys and the dispatch token live in `push_config`, readable only by the `push_*` SECURITY DEFINER functions
 - Whose shit is it: migration `20261101000000_whose_shit.sql` adds `inventory_items.owner_user` (null = ours; set on the item page with `setItemOwner`) and hand-offs (`apply_handoff`, called by `handoff_item` from the offer card's Ask button via `handOffOffer`, and by `assistant_handoff` for `hand_off` in `/api/assistant`). A hand-off is a `push_queue` row of kind `handoff` addressed to one member; an offer on someone's thing still buzzes everyone but reads "Somebody wants your shit" / "Somebody wants Lauren's shit" (`notificationsForTask` in `lib/push/notify.ts`)
+- `lib/comps.ts` market comparables ("what others sell this for": lowest now, typical, below/comparable/above verdict); `lib/ebay/browse.ts` pulls live eBay listings with the app token; `app/comps-actions.ts` + `components/comps-card.tsx` on the item page. Agents that research prices record what they find in `item_comps` (`source = 'manual'`, `added_by_agent` set, https link), never in the repo
 - Platform toggles: migration `20261101030000_platform_wants.sql` (`item_platform_wants` + `item_platform_gaps` view); `app/platform-actions.ts` `setPlatformWant` flips a switch and closes the gap (eBay posts/ends via `marketplace-actions`, others get a `listing_draft`/`delist` to-do with `payload.platform`); `lib/platform-wants.ts` `noteListingRecorded` marks the switch on and the post to-do done when a listing is recorded by hand; UI `components/platform-toggles.tsx`
 - `lib/fees.ts` fee rules per platform with `verifiedOn` dates; update the date and source when you re-check
-- `lib/platforms.ts` platform capabilities and posting rules
+- `lib/platforms.ts` platform capabilities and posting rules; `MANUAL_PLATFORMS` are the no-API ones
+- `lib/listing-copy.ts` buyer-facing listing text per no-API platform (tested; stays clean, never uses private notes), shown by `components/post-it-ourselves.tsx`
 - `supabase/migrations/` schema with row-level security per household; `marketplace_connections` holds encrypted tokens
 - `docs/roadmap.md` staged plan and known integration limits; `docs/ebay-setup.md` / `docs/etsy-setup.md` owner checklists

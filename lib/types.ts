@@ -186,6 +186,27 @@ export type Note = {
   updated_at: string;
 };
 
+/** A comparable listing someone else has up (or sold); see supabase/migrations/20261101020000_item_comps.sql. */
+export type ItemComp = {
+  id: string;
+  household_id: string;
+  item_id: string;
+  source: "ebay" | "manual";
+  platform: string;
+  title: string;
+  price: number | string;
+  shipping: number | string | null;
+  url: string | null;
+  condition: string | null;
+  kind: "active" | "sold";
+  note: string | null;
+  external_id: string | null;
+  created_by: string | null;
+  added_by_agent: string | null;
+  captured_at: string;
+  created_at: string;
+};
+
 export type ItemPhoto = {
   id: string;
   household_id: string;

@@ -76,6 +76,23 @@ export const FEE_RULES: Record<string, FeeRule> = {
     sourceUrl: "https://www.mercari.com/us/help_center/article/169/",
     notes: "10% of item price plus buyer-paid shipping. No processing fee. Buyer pays 3.6% protection.",
   },
+  offerup: {
+    percent: 0.129,
+    percentBase: "item",
+    minimumFee: 1.99,
+    shippingPaidBy: "either",
+    verifiedOn: "2026-11-01 (third-party)",
+    sourceUrl: "https://closo.co/blogs/fees/offerup-fees",
+    notes: "Shipped sales: about 12.9%, $1.99 minimum. Local pickup (cash or in-app) has no seller fee, so a local sale keeps the whole price.",
+  },
+  thredup: {
+    percent: 0,
+    percentBase: "item",
+    shippingPaidBy: "seller",
+    verifiedOn: "2026-11-01",
+    sourceUrl: "https://help.thredup.com/en_us/how-do-thredups-fees-work-H106jQyih",
+    notes: "Consignment: ThredUp sets the price and pays out a cut that varies by price. A $14.99 Clean Out fee comes out of earnings once things sell. Shipping the bag is free. Record the payout itself as the sale price.",
+  },
   depop: {
     percent: 0,
     percentBase: "item",
