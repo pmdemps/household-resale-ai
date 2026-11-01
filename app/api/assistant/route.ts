@@ -4,12 +4,14 @@ import {
   BadRequest,
   decisionSay,
   enrichOffers,
+  handoffSay,
   parseAction,
   recordOfferSay,
   saleSay,
   summarizeInbox,
   type AssistantAction,
   type DecisionResult,
+  type HandoffResult,
   type Inbox,
   type RecordOfferResult,
   type SaleResult,
@@ -29,7 +31,7 @@ export const maxDuration = 30;
 //
 //   GET  /api/assistant            what needs a decision (offers, to-dos) and the live listings; `?peek=1`
 //                                  leaves the "new since last check" watermark alone.
-//   POST /api/assistant            { action: decide | record_offer | record_sale | note | resolve_task | propose_task, ... }
+//   POST /api/assistant            { action: decide | record_offer | record_sale | note | resolve_task | propose_task | hand_off, ... }
 //
 // Credential: an assistant key from Settings, sent as `Authorization: Bearer <key>` (or `X-Assistant-Key`).
 // The key is checked inside the database functions, which also attribute every write to the member who owns
@@ -52,6 +54,7 @@ const HELP = {
     note: { text: "string", item_id: "optional" },
     resolve_task: { task_id: "<from tasks>", status: "done | approved | rejected | cancelled" },
     propose_task: { kind: "message_reply | price_change | listing_draft | relist | other", title: "string", detail: "optional", item_id: "optional", listing_id: "optional" },
+    hand_off: { to: "a household member's name (blank = the only other member)", offer_id: "<from pending_offers>", item_id: "<from listings>, when there is no offer" },
   },
 };
 
@@ -87,6 +90,7 @@ export async function GET(request: NextRequest) {
       say: summarizeInbox(inbox, offers),
       household: inbox.household,
       member: inbox.member,
+      members: inbox.members ?? [],
       assistant: inbox.assistant,
       checked_at: inbox.checked_at,
       new_since: inbox.new_since,
@@ -135,6 +139,12 @@ export async function POST(request: NextRequest) {
           p_key: key, p_kind: action.kind, p_title: action.title, p_detail: action.detail, p_item_id: action.item_id, p_listing_id: action.listing_id,
         });
         return json({ ok: true, say: r.duplicate ? `"${r.title}" is already on the to-do list.` : `Added "${r.title}" to the household's to-do list.`, result: r });
+      }
+      case "hand_off": {
+        const r = await callAssistantFunction<HandoffResult>("assistant_handoff", {
+          p_key: key, p_to: action.to, p_offer_id: action.offer_id, p_item_id: action.item_id,
+        });
+        return json({ ok: true, say: handoffSay(r, action.to), result: r });
       }
     }
   } catch (e) {

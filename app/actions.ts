@@ -126,6 +126,34 @@ export async function updateItem(form: FormData) {
   redirect(`/inventory/${id}`);
 }
 
+/** "Whose shit is it?" on the item page: a member's id, or blank for ours. The database checks they're in the household. */
+export async function setItemOwner(form: FormData) {
+  const ctx = await requireHousehold();
+  const id = text(form, "item_id", 64);
+  const owner = optText(form, "owner_user", 64);
+  fail((await ctx.supabase.from("inventory_items").update({ owner_user: owner }).eq("id", id).eq("household_id", ctx.household.id)).error);
+  await log(ctx, "item_owner_set", "item", id, { owner_user: owner });
+  revalidatePath(`/inventory/${id}`);
+  revalidatePath("/offers");
+  revalidatePath("/");
+}
+
+/**
+ * "That's Lauren's, go ask her": marks the thing as theirs and buzzes only their phone with
+ * "<you> says this is your shit. How badly do you wanna sell it?". Anyone can still answer the offer.
+ */
+export async function handOffOffer(form: FormData) {
+  const ctx = await requireHousehold();
+  const offerId = text(form, "offer_id", 64);
+  const to = text(form, "to_user", 64);
+  const { data, error } = await ctx.supabase.rpc("handoff_item", { p_household_id: ctx.household.id, p_to: to, p_offer_id: offerId });
+  fail(error);
+  const itemId = (data as { item?: { id?: string } } | null)?.item?.id;
+  revalidatePath("/");
+  revalidatePath("/offers");
+  if (itemId) revalidatePath(`/inventory/${itemId}`);
+}
+
 export async function setItemStatus(form: FormData) {
   const ctx = await requireHousehold();
   const id = text(form, "id", 64);

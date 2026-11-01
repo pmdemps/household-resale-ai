@@ -13,12 +13,22 @@ export type PushTask = {
   detail: string | null;
   item_id: string | null;
   offer_id: string | null;
+  /** Whose thing the to-do is about (inventory_items.owner_user); null or missing when it's ours. */
+  owner_id?: string | null;
+  /** That member's display name; null when they haven't set one. */
+  owner_name?: string | null;
 };
 
 export type ClaimItem = {
   queue_id: number;
-  kind: "task" | "test";
+  /** "handoff": one member asked another about their thing ("that's Lauren's, go ask her"). */
+  kind: "task" | "test" | "handoff";
   target_user: string | null;
+  /** Hand-offs: who asked, and their display name (null when they haven't set one). */
+  from_user?: string | null;
+  from_name?: string | null;
+  /** The thing a hand-off or to-do is about. */
+  item?: { id: string; name: string } | null;
   task: PushTask | null;
 };
 
@@ -37,8 +47,21 @@ export type PushClaim = {
 /** The JSON a phone receives; public/sw.js turns it into the notification. */
 export type PushPayload = { title: string; body: string; url: string; tag: string; badge: number };
 
-/** targetUser null = every member's devices. */
-export type OutgoingNotification = { targetUser: string | null; payload: PushPayload };
+/** targetUser null = every member's devices; exceptUser leaves one member's devices out. */
+export type OutgoingNotification = { targetUser: string | null; exceptUser?: string | null; payload: PushPayload };
+
+/** What we call a member who hasn't put their name in Settings yet. */
+export const UNNAMED_MEMBER = "your other half";
+
+/** "Lauren" → "Lauren's", "James" → "James'". */
+export function possessive(name: string): string {
+  const n = name.trim();
+  return /s$/i.test(n) ? `${n}'` : `${n}'s`;
+}
+
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
 
 /** More new to-dos than this at once become one summary instead of a pile of buzzes. */
 export const MAX_SEPARATE = 3;
@@ -68,14 +91,43 @@ export function clip(text: string, max: number): string {
   return t.length <= max ? t : t.slice(0, Math.max(0, max - 1)).trimEnd() + "…";
 }
 
-export function notificationForTask(task: PushTask, badge: number): PushPayload {
+export function notificationForTask(task: PushTask, badge: number, heading = headingFor(task.kind)): PushPayload {
   const title = clip(task.title, 140);
   const detail = task.detail ? clip(task.detail, 110) : "";
   return {
-    title: headingFor(task.kind),
+    title: heading,
     body: detail ? `${title}\n${detail}` : title,
     url: urlFor(task),
     tag: `task-${task.id}`,
+    badge,
+  };
+}
+
+/**
+ * One to-do → its notification(s). Everyone gets buzzed, but an offer on someone's thing says so:
+ * "Somebody wants your shit" on the owner's phones, "Somebody wants Lauren's shit" on everyone else's.
+ */
+export function notificationsForTask(task: PushTask, badge: number): OutgoingNotification[] {
+  if (task.kind === "offer_decision" && task.owner_id) {
+    const owner = task.owner_name?.trim() || UNNAMED_MEMBER;
+    return [
+      { targetUser: task.owner_id, payload: notificationForTask(task, badge, "Somebody wants your shit") },
+      { targetUser: null, exceptUser: task.owner_id, payload: notificationForTask(task, badge, `Somebody wants ${possessive(owner)} shit`) },
+    ];
+  }
+  return [{ targetUser: null, payload: notificationForTask(task, badge) }];
+}
+
+/** "Patrick says this is your shit. How badly do you wanna sell it?" Only the member who was asked gets it. */
+export function handoffNotification(item: ClaimItem, badge: number): PushPayload {
+  const from = item.from_name?.trim() || capitalize(UNNAMED_MEMBER);
+  const task = item.task && item.task.status === "pending" ? item.task : null;
+  const about = task ? clip(task.title, 140) : clip(item.item?.name ?? "Something of yours", 140);
+  return {
+    title: `${from} says this is your shit`,
+    body: `How badly do you wanna sell it?\n${about}`,
+    url: task?.kind === "offer_decision" ? "/offers" : item.item ? `/inventory/${item.item.id}` : "/",
+    tag: `handoff-${task?.id ?? item.item?.id ?? item.queue_id}`,
     badge,
   };
 }
@@ -103,9 +155,10 @@ export function testNotification(badge: number): PushPayload {
 }
 
 /**
- * Turns claimed queue rows into notifications. Tests go only to the member who asked. To-dos that were
- * already handled in the seconds before the push went out are skipped; more than MAX_SEPARATE new ones
- * become one summary. Every notification carries the pending count for the app-icon badge.
+ * Turns claimed queue rows into notifications. Tests and hand-offs go only to the member they are for (a
+ * hand-off whose offer was answered in the meantime is dropped). To-dos that were already handled in the
+ * seconds before the push went out are skipped; more than MAX_SEPARATE new ones become one summary. Every
+ * notification carries the pending count for the app-icon badge.
  */
 export function composeNotifications(items: ClaimItem[], pendingCount: number): OutgoingNotification[] {
   const badge = Math.max(0, Math.floor(Number(pendingCount)) || 0);
@@ -113,6 +166,9 @@ export function composeNotifications(items: ClaimItem[], pendingCount: number): 
 
   for (const item of items) {
     if (item.kind === "test" && item.target_user) out.push({ targetUser: item.target_user, payload: testNotification(badge) });
+    if (item.kind === "handoff" && item.target_user && (!item.task || item.task.status === "pending")) {
+      out.push({ targetUser: item.target_user, payload: handoffNotification(item, badge) });
+    }
   }
 
   const seen = new Set<string>();
@@ -125,7 +181,7 @@ export function composeNotifications(items: ClaimItem[], pendingCount: number): 
   }
 
   if (tasks.length > MAX_SEPARATE) out.push({ targetUser: null, payload: summaryNotification(tasks, badge) });
-  else for (const t of tasks) out.push({ targetUser: null, payload: notificationForTask(t, badge) });
+  else for (const t of tasks) out.push(...notificationsForTask(t, badge));
   return out;
 }
 

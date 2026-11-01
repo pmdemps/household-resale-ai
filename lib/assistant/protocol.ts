@@ -21,8 +21,19 @@ export type InboxOffer = {
   is_new: boolean;
   via_api: boolean;
   listing: { id: string; platform: string; list_price: number; url: string | null };
-  item: { id: string; name: string; floor_price: number | null; purchase_cost: number };
+  item: {
+    id: string;
+    name: string;
+    floor_price: number | null;
+    purchase_cost: number;
+    /** Whose thing it is; null when it's shared. name is null for a member who hasn't set one. */
+    owner?: { id: string; name: string | null; is_you: boolean } | null;
+  };
+  /** Set when the offer was handed to a member ("that's Lauren's, go ask her"). */
+  asked?: { id: string; name: string | null; at: string } | null;
 };
+
+export type InboxMember = { id: string; name: string | null; is_you: boolean };
 
 export type InboxTask = {
   task_id: string;
@@ -45,11 +56,16 @@ export type InboxListing = {
   list_price: number;
   floor_price: number | null;
   url: string | null;
+  /** Whose thing it is (display name), or null when it's shared or the owner hasn't set a name. */
+  owner?: string | null;
+  owner_id?: string | null;
 };
 
 export type Inbox = {
   household: { id: string; name: string } | null;
   member: { id: string; name: string } | null;
+  /** Everyone in the household, so a hand-off can name them. */
+  members?: InboxMember[];
   assistant: string;
   checked_at: string;
   new_since: string;
@@ -85,6 +101,17 @@ export type SaleResult = {
   shipping_cost: number;
   payout: number;
   delist_tasks: number;
+};
+
+/** What public.assistant_handoff / handoff_item return. */
+export type HandoffResult = {
+  item: { id: string; name: string };
+  to: { id: string; name: string | null };
+  from: { id: string; name: string | null };
+  offer: { id: string; amount: number; platform: string; platform_name: string } | null;
+  task_id: string | null;
+  /** How many of that member's phones have notifications on. */
+  devices: number;
 };
 
 export type RecordOfferResult = {
@@ -144,15 +171,30 @@ export function enrichOffers(offers: InboxOffer[], ebayConnected: boolean): Enri
 // ---------------------------------------------------------------------------
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
+const OTHER_MEMBER = "the other household member";
+
+/** "Lauren" → "Lauren's", "James" → "James'". */
+export function possessive(name: string): string {
+  const n = name.trim();
+  return /s$/i.test(n) ? `${n}'` : `${n}'s`;
+}
+
+/** "(yours)", "(Lauren's)" or "" for a shared item. */
+function ownerTag(owner: { name: string | null; is_you: boolean } | null | undefined): string {
+  if (!owner) return "";
+  return owner.is_you ? " (yours)" : ` (${possessive(owner.name?.trim() || OTHER_MEMBER)})`;
+}
+
 export function describeOffer(o: EnrichedOffer): string {
   const floor = o.item.floor_price === null || o.item.floor_price === undefined ? null : num(o.item.floor_price);
   const parts = [
-    `${money(num(o.amount))} for ${o.item.name} on ${o.platform_name}`,
+    `${money(num(o.amount))} for ${o.item.name}${ownerTag(o.item.owner)} on ${o.platform_name}`,
     `asking ${money(num(o.listing.list_price))}${o.money.pct_off > 0 ? `, ${o.money.pct_off}% off` : ""}`,
     `you'd pocket ${money(o.money.payout)} after fees`,
   ];
   if (floor !== null) parts.push(o.money.below_floor ? `BELOW the ${money(floor)} floor` : `floor ${money(floor)}`);
   if (o.buyer) parts.push(`from ${o.buyer}`);
+  if (o.asked) parts.push(`${o.asked.name?.trim() || OTHER_MEMBER} has been asked about it`);
   return parts.join("; ");
 }
 
@@ -203,6 +245,21 @@ export function saleSay(s: SaleResult): string {
   return lines.join(" ");
 }
 
+/** What happened after "that's Lauren's, go ask her". `askedFor` is the name the member used. */
+export function handoffSay(r: HandoffResult, askedFor?: string | null): string {
+  const to = r.to.name?.trim() || askedFor?.trim() || "The other household member";
+  const about = r.offer ? `the ${money(num(r.offer.amount))} offer on ${r.item.name} (${r.offer.platform_name})` : r.item.name;
+  const lines = [`Handed ${about} to ${to}.`];
+  lines.push(
+    r.devices > 0
+      ? `${possessive(to)} phone was notified and asked how badly they want to sell it.`
+      : `${to} does not have phone notifications on in Resale HQ, so tell them directly.`,
+  );
+  lines.push(`${r.item.name} is now marked as ${possessive(to)}${r.offer ? "; either of you can still answer the offer" : ""}.`);
+  if (!r.to.name) lines.push(`${to} has not set a name in Resale HQ yet (Settings, Your name).`);
+  return lines.join(" ");
+}
+
 export function recordOfferSay(r: RecordOfferResult): string {
   if (r.duplicate) return `That ${money(num(r.amount))} offer on ${r.item.name} (${platformName(r.listing.platform)}) was already recorded; nothing added.`;
   return `Recorded a ${money(num(r.amount))} offer on ${r.item.name} (${platformName(r.listing.platform)}, asking ${money(num(r.listing.list_price))}). Ask the household whether to accept, counter or decline.`;
@@ -231,7 +288,8 @@ export type AssistantAction =
   | { action: "record_sale"; listing_id: string; sale_price: number; shipping_cost: number }
   | { action: "note"; text: string; item_id: string | null }
   | { action: "resolve_task"; task_id: string; status: "approved" | "rejected" | "done" | "cancelled" }
-  | { action: "propose_task"; kind: "price_change" | "listing_draft" | "relist" | "message_reply" | "other"; title: string; detail: string | null; item_id: string | null; listing_id: string | null };
+  | { action: "propose_task"; kind: "price_change" | "listing_draft" | "relist" | "message_reply" | "other"; title: string; detail: string | null; item_id: string | null; listing_id: string | null }
+  | { action: "hand_off"; to: string | null; offer_id: string | null; item_id: string | null };
 
 export class BadRequest extends Error {}
 
@@ -253,7 +311,7 @@ const amount = (v: unknown, field: string): number => {
 };
 const optAmount = (v: unknown, field: string): number | null => (v === null || v === undefined || v === "" ? null : amount(v, field));
 
-export const ASSISTANT_ACTIONS = ["decide", "record_offer", "record_sale", "note", "resolve_task", "propose_task"] as const;
+export const ASSISTANT_ACTIONS = ["decide", "record_offer", "record_sale", "note", "resolve_task", "propose_task", "hand_off"] as const;
 
 /** Validates a POST body. Throws BadRequest with a sentence the assistant can act on. */
 export function parseAction(body: unknown): AssistantAction {
@@ -305,6 +363,12 @@ export function parseAction(body: unknown): AssistantAction {
       const title = str(b.title, 300);
       if (!title) throw new BadRequest("A task needs a title.");
       return { action, kind: kind as "price_change" | "listing_draft" | "relist" | "message_reply" | "other", title, detail: str(b.detail, 2000), item_id: optUuid(b.item_id, "item_id"), listing_id: optUuid(b.listing_id, "listing_id") };
+    }
+    case "hand_off": {
+      const offerId = optUuid(b.offer_id, "offer_id");
+      const itemId = optUuid(b.item_id, "item_id");
+      if (!offerId && !itemId) throw new BadRequest("A hand-off needs offer_id (from pending_offers) or item_id (from listings).");
+      return { action, to: str(b.to ?? b.member ?? b.name, 40), offer_id: offerId, item_id: itemId };
     }
     default:
       throw new BadRequest(`Unknown action "${action}". Use one of: ${ASSISTANT_ACTIONS.join(", ")}.`);

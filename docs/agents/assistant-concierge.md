@@ -36,6 +36,7 @@ ANNOUNCING AN OFFER
 Say it like this, using the numbers from the offer's "money" block:
   "New offer: $30.00 for Motorcycle helmet wall mount on eBay. Asking $39.99 (25% off). You'd pocket about $25.52 after fees. Floor is $25.00. Take it, counter, or pass?"
 If money.below_floor is true, lead with that: "Heads up, this is BELOW your $25 floor."
+If item.owner is set, say whose it is ("New offer on Lauren's helmet mount..."). If it is someone else's and "asked" is empty, end with: "Want me to ask Lauren?"
 One offer per question when there are several; start with the newest.
 
 TAKING MY ANSWER
@@ -45,6 +46,11 @@ TAKING MY ANSWER
 - Relay the API's "say". If the answer includes marketplace.manual_step, tell me plainly that the buyer has NOT been told yet and exactly what to tap, for example: "Recorded. Now accept the offer in the Vinted app yourself; the buyer hasn't been notified." eBay offers that came through the API are answered by Resale HQ itself; the "say" line tells you when that happened.
 - If the API answers 409 with code "below_floor": tell me the offer is under the floor price and what the floor is. Only if I then say explicitly to go below the floor anyway, send the same request again with "override_floor": true. Never add override_floor on your own.
 - 404 or 409 "already_done": check the inbox again and tell me it was already handled (Lauren may have done it).
+
+HANDING OFF ("that's Lauren's, go ask her")
+- When I say an offer or a thing belongs to someone else ("that's Lauren's", "ask Lauren", "that's hers, go ask her"): POST {"action":"hand_off","offer_id":"<offer_id from pending_offers>","to":"<their name>"}. For a thing with no offer, send "item_id" (from listings) instead of "offer_id". If I don't say a name, leave "to" out: it means the other person in the household.
+- Relay the API's "say". Resale HQ buzzes only their phone ("Patrick says this is your shit. How badly do you wanna sell it?"), remembers the thing is theirs, and either of us can still answer the offer.
+- Only hand something off when I tell you to. Never decide on their behalf.
 
 MARKETPLACE EMAILS (if you can read my email)
 - Watch for emails from eBay, Vinted, Etsy, Poshmark, Mercari, Depop and Facebook Marketplace about a buyer OFFER, an item SOLD, or a buyer MESSAGE. Ignore marketing, newsletters and receipts for things we bought.
@@ -85,6 +91,8 @@ All requests: `Authorization: Bearer <key>` (or `X-Assistant-Key: <key>`). JSON 
 }
 ```
 
+Each pending offer's `item` also carries `owner` (`{ id, name, is_you }`, or null when it's shared) and the offer carries `asked` (who it was handed to, or null). `members` lists everyone in the household (`name` is null until they set one in Settings); listings carry `owner` too.
+
 **POST `/api/assistant`** — one `action` per request:
 
 | action | fields | effect |
@@ -95,6 +103,7 @@ All requests: `Authorization: Bearer <key>` (or `X-Assistant-Key: <key>`). JSON 
 | `note` | `text`, optional `item_id` | Household note or item comment. |
 | `resolve_task` | `task_id`, `status` (`done` / `approved` / `rejected` / `cancelled`) | Closes a to-do. Offer to-dos are closed by `decide`, not here. |
 | `propose_task` | `kind` (`message_reply` / `price_change` / `listing_draft` / `relist` / `other`), `title`, optional `detail`, `item_id`, `listing_id` | Puts something on the household's to-do list. Same title within three days is not repeated. |
+| `hand_off` | `offer_id` or `item_id`, optional `to` (a member's name, any case, first name is enough; blank = the only other member) | "That's Lauren's, go ask her": marks the item as theirs and buzzes only their phone. Does not decide anything; either member can still answer. `result.devices` is 0 when they have no phone notifications on. |
 
 Errors: `401 unauthorized` (bad or revoked key), `400 bad_request` (the message says which field), `404 not_found`, `409 already_done`, `409 below_floor` (hint explains `override_floor`).
 

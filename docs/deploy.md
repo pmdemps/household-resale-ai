@@ -16,6 +16,7 @@ Time: about 20 minutes. Cost: $0 (Supabase Free + Vercel Hobby, which is fine fo
    6. `20261030020000_item_photos.sql`
    7. `20261031000000_assistant_access.sql` (offer decisions, sales and the assistant API run through its SQL functions, so the app needs it)
    8. `20261031010000_push_notifications.sql` (phone notifications; also switches on Supabase's `pg_net` extension, see step 6)
+   9. `20261101000000_whose_shit.sql` ("Whose shit is it?" on items, and "that's Lauren's, go ask her" hand-offs that buzz only that person's phone)
    - If the editor warns that a file has "destructive operations", that's the `drop policy if exists` / `drop trigger if exists` lines that let a file be re-run safely. Run it. Every file can be run again without harm.
 3. **Project Settings → API Keys**: copy the **Project URL** and the **publishable** key. Never use the `service_role`/secret key in the web app.
 

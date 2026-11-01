@@ -38,6 +38,7 @@ Dashboard, items with location/size/condition/floor price, listings per platform
 - Needs: a server-side agent key (service role, never in the browser), real sample emails to build parsers against, dedupe by message ID.
 
 ### Stage 3 — Agent API + approval loop (first half ✅)
+- ✅ Whose shit is it: items can belong to one of us ("Whose shit is it?" on the item page). "That's Lauren's, go ask her" (offer card button, `hand_off` in the assistant API, or Claude) marks it as hers and buzzes only her phone: "Patrick says this is your shit. How badly do you wanna sell it?" New offers on her stuff still buzz both phones, worded for each ("your shit" / "Lauren's shit"). Either of us can still answer (`20261101000000_whose_shit.sql`).
 - ✅ `/api/assistant`: per-member assistant keys (made in Settings, revocable, SHA-256 stored, logged as `actor_agent`). The household's own assistant (Muse, ChatGPT) reads what needs a decision and relays the member's accept / counter / decline, records offers and sales the member confirmed, leaves notes and closes to-dos. Floor price enforced in SQL. See `docs/agents/assistant-concierge.md`.
 - Later: read-only / propose-only keys for autonomous agents (today a key always acts for a member), an MCP server wrapping the same calls.
 

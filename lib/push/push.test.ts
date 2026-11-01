@@ -8,6 +8,7 @@ import {
   deviceLabelFromUserAgent,
   isAllowedPushEndpoint,
   normalizeKey,
+  possessive,
   pushErrorMessage,
   validSubscriptionKeys,
   vapidSubject,
@@ -24,6 +25,8 @@ const task = (over: Partial<PushTask> = {}): PushTask => ({
   detail: over.detail ?? null,
   item_id: over.item_id ?? null,
   offer_id: over.offer_id ?? null,
+  owner_id: over.owner_id ?? null,
+  owner_name: over.owner_name ?? null,
 });
 const item = (t: PushTask, queueId = 1): ClaimItem => ({ queue_id: queueId, kind: "task", target_user: null, task: t });
 
@@ -164,4 +167,54 @@ test("VAPID public key round-trips between base64url and bytes", () => {
   assert.ok(sameServerKey(bytes.buffer, encoded + "="), "padding does not matter");
   assert.ok(!sameServerKey(new Uint8Array(65).buffer, encoded));
   assert.ok(!sameServerKey(null, encoded));
+});
+
+test("an offer on someone's thing says whose it is: \"your shit\" for them, their name for everyone else", () => {
+  const out = composeNotifications([item(task({ owner_id: "lauren", owner_name: "Lauren" }))], 1);
+  assert.equal(out.length, 2);
+  assert.deepEqual([out[0].targetUser, out[0].exceptUser ?? null, out[0].payload.title], ["lauren", null, "Somebody wants your shit"]);
+  assert.deepEqual([out[1].targetUser, out[1].exceptUser, out[1].payload.title], [null, "lauren", "Somebody wants Lauren's shit"]);
+  assert.equal(out[1].payload.body, "Offer: $30.00 for Helmet wall mount on eBay");
+  assert.equal(out[1].payload.url, "/offers");
+});
+
+test("an owner without a name yet is \"your other half\"; other to-dos on their thing stay as they are", () => {
+  const [, others] = composeNotifications([item(task({ owner_id: "lauren", owner_name: null }))], 0);
+  assert.equal(others.payload.title, "Somebody wants your other half's shit");
+  const msg = composeNotifications([item(task({ kind: "message_reply", owner_id: "lauren", owner_name: "Lauren" }))], 0);
+  assert.equal(msg.length, 1);
+  assert.equal(msg[0].targetUser, null);
+  assert.equal(msg[0].payload.title, "A buyer's hitting us up");
+});
+
+test("a hand-off buzzes only the person asked: \"Patrick says this is your shit\"", () => {
+  const handoff: ClaimItem = {
+    queue_id: 7, kind: "handoff", target_user: "lauren", from_user: "patrick", from_name: "Patrick",
+    item: { id: "i1", name: "Helmet wall mount" }, task: task({ id: "t9" }),
+  };
+  const out = composeNotifications([handoff], 3);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].targetUser, "lauren");
+  assert.deepEqual(out[0].payload, {
+    title: "Patrick says this is your shit",
+    body: "How badly do you wanna sell it?\nOffer: $30.00 for Helmet wall mount on eBay",
+    url: "/offers",
+    tag: "handoff-t9",
+    badge: 3,
+  });
+});
+
+test("a hand-off without an offer opens the thing; one whose offer was answered meanwhile is dropped", () => {
+  const bare: ClaimItem = { queue_id: 8, kind: "handoff", target_user: "lauren", from_user: "patrick", from_name: null, item: { id: "i2", name: "Kids sneakers" }, task: null };
+  const [n] = composeNotifications([bare], 0);
+  assert.equal(n.payload.title, "Your other half says this is your shit");
+  assert.equal(n.payload.body, "How badly do you wanna sell it?\nKids sneakers");
+  assert.equal(n.payload.url, "/inventory/i2");
+  const answered: ClaimItem = { ...bare, task: task({ status: "done" }) };
+  assert.equal(composeNotifications([answered], 0).length, 0);
+});
+
+test("possessives", () => {
+  assert.equal(possessive("Lauren"), "Lauren's");
+  assert.equal(possessive("James "), "James'");
 });

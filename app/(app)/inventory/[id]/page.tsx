@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ExternalLink, MapPin, Plus } from "lucide-react";
-import { addListing, recordOffer, recordSale, updateItem, updateListing } from "@/app/actions";
+import { addListing, recordOffer, recordSale, setItemOwner, updateItem, updateListing } from "@/app/actions";
 import { FeeBreakdown } from "@/components/fee-breakdown";
 import { FeeCalculator } from "@/components/fee-calculator";
 import { ItemForm } from "@/components/item-form";
@@ -14,7 +14,7 @@ import { loadPhotos } from "@/lib/photos";
 import { PostToEbay } from "@/components/post-to-ebay";
 import { isUsableConnection, loadEbayConnection } from "@/lib/ebay/connection";
 import { PLATFORMS, platformById, platformName } from "@/lib/platforms";
-import { loadMemberNames, loadNotes, loadPendingOffers } from "@/lib/queries";
+import { loadMemberNames, loadMembers, loadNotes, loadPendingOffers } from "@/lib/queries";
 import { NoteComposer, NotesList } from "@/components/notes";
 import { itemStatusLabel, listingStatusLabel, money, num, offerStatusLabel, type InventoryItem, type Listing, type Offer, type Sale } from "@/lib/types";
 
@@ -23,7 +23,7 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
   const ctx = await requireHousehold();
   const hid = ctx.household.id;
 
-  const [itemRes, listingsRes, offersRes, saleRes, pending, comments, names, photos] = await Promise.all([
+  const [itemRes, listingsRes, offersRes, saleRes, pending, comments, names, photos, members] = await Promise.all([
     ctx.supabase.from("inventory_items").select("*").eq("household_id", hid).eq("id", id).maybeSingle(),
     ctx.supabase.from("listings").select("*").eq("household_id", hid).eq("item_id", id).order("created_at"),
     ctx.supabase.from("offers").select("*, listings!inner(item_id, platform)").eq("household_id", hid).eq("listings.item_id", id).neq("status", "pending").order("received_at", { ascending: false }),
@@ -32,6 +32,7 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
     loadNotes(ctx, { itemId: id }),
     loadMemberNames(ctx),
     loadPhotos(ctx, id),
+    loadMembers(ctx),
   ]);
   const ebayConn = await loadEbayConnection(ctx.supabase, hid).catch(() => null);
   if (!itemRes.data) notFound();
@@ -66,6 +67,19 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
             {item.floor_price !== null && <p className="text-slate-500">Rock bottom {money(num(item.floor_price))}</p>}
           </div>
         </div>
+        {members.length > 1 && (
+          <form action={setItemOwner} className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+            <input type="hidden" name="item_id" value={item.id} />
+            <label htmlFor="owner_user" className="text-slate-400">Whose shit is it?</label>
+            <select id="owner_user" name="owner_user" defaultValue={item.owner_user ?? ""} className="field w-auto">
+              <option value="">Ours</option>
+              {members.map(m => (
+                <option key={m.id} value={m.id}>{m.id === ctx.userId ? "Mine" : m.name ? `${m.name}${/s$/i.test(m.name) ? "'" : "'s"}` : "My other half's"}</option>
+              ))}
+            </select>
+            <button className="btn-secondary">Save</button>
+          </form>
+        )}
       </header>
 
       <ItemPhotos householdId={hid} itemId={item.id} itemName={item.name} photos={photos} justCreated={saved === "1"} />
@@ -89,7 +103,7 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
       {pending.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-lg font-semibold text-white">Somebody wants this shit</h2>
-          {pending.map(o => <OfferCard key={o.id} offer={o} />)}
+          {pending.map(o => <OfferCard key={o.id} offer={o} members={members} currentUser={ctx.userId} />)}
         </section>
       )}
 
