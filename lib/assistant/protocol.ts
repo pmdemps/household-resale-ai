@@ -1,5 +1,7 @@
+import { summarizeComps, verdictSentence } from "../comps.ts";
 import { estimateFees } from "../fees.ts";
-import { platformName } from "../platforms.ts";
+import { buildListingCopy, type ListingCopy } from "../listing-copy.ts";
+import { MANUAL_PLATFORMS, platformName } from "../platforms.ts";
 import { money, num } from "../types.ts";
 
 // Pure half of /api/assistant: the shapes the SQL functions return, request validation, and the plain
@@ -289,7 +291,9 @@ export type AssistantAction =
   | { action: "note"; text: string; item_id: string | null }
   | { action: "resolve_task"; task_id: string; status: "approved" | "rejected" | "done" | "cancelled" }
   | { action: "propose_task"; kind: "price_change" | "listing_draft" | "relist" | "message_reply" | "other"; title: string; detail: string | null; item_id: string | null; listing_id: string | null }
-  | { action: "hand_off"; to: string | null; offer_id: string | null; item_id: string | null };
+  | { action: "hand_off"; to: string | null; offer_id: string | null; item_id: string | null }
+  | { action: "set_platform"; item_id: string; platform: string; on: boolean }
+  | { action: "add_comp"; item_id: string; platform: string; title: string; price: number; shipping: number | null; url: string | null; kind: "active" | "sold"; condition: string | null; note: string | null };
 
 export class BadRequest extends Error {}
 
@@ -311,7 +315,7 @@ const amount = (v: unknown, field: string): number => {
 };
 const optAmount = (v: unknown, field: string): number | null => (v === null || v === undefined || v === "" ? null : amount(v, field));
 
-export const ASSISTANT_ACTIONS = ["decide", "record_offer", "record_sale", "note", "resolve_task", "propose_task", "hand_off"] as const;
+export const ASSISTANT_ACTIONS = ["decide", "record_offer", "record_sale", "note", "resolve_task", "propose_task", "hand_off", "set_platform", "add_comp"] as const;
 
 /** Validates a POST body. Throws BadRequest with a sentence the assistant can act on. */
 export function parseAction(body: unknown): AssistantAction {
@@ -370,6 +374,32 @@ export function parseAction(body: unknown): AssistantAction {
       if (!offerId && !itemId) throw new BadRequest("A hand-off needs offer_id (from pending_offers) or item_id (from listings).");
       return { action, to: str(b.to ?? b.member ?? b.name, 40), offer_id: offerId, item_id: itemId };
     }
+    case "set_platform": {
+      const platform = normalizePlatformWord(b.platform);
+      if (!platform) throw new BadRequest(`platform must be one of: ${SWITCH_PLATFORMS.join(", ")}.`);
+      const on = normalizeOnOff(b.on ?? b.wanted ?? b.state);
+      if (on === null) throw new BadRequest("on must be true (list it there) or false (take it down).");
+      return { action, item_id: uuid(b.item_id, "item_id"), platform, on };
+    }
+    case "add_comp": {
+      const title = str(b.title, 300);
+      if (!title) throw new BadRequest("A comp needs the title of the listing you found.");
+      const url = str(b.url, 1000);
+      if (url && !/^https:\/\//i.test(url)) throw new BadRequest("url must start with https://");
+      const kind = str(b.kind, 10) === "sold" ? "sold" : "active";
+      return {
+        action,
+        item_id: uuid(b.item_id, "item_id"),
+        platform: (str(b.platform, 40) ?? "other").toLowerCase(),
+        title,
+        price: amount(b.price ?? b.amount, "price"),
+        shipping: optAmount(b.shipping, "shipping"),
+        url,
+        kind,
+        condition: str(b.condition, 80),
+        note: str(b.note, 300),
+      };
+    }
     default:
       throw new BadRequest(`Unknown action "${action}". Use one of: ${ASSISTANT_ACTIONS.join(", ")}.`);
   }
@@ -405,4 +435,146 @@ export function mapDbError(err: { code?: string | null; message?: string | null 
     default:
       return { status: 500, code: "error", error: message };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Platform switches and comps (migration 20261101040000_assistant_switches_comps.sql)
+// ---------------------------------------------------------------------------
+export const SWITCH_PLATFORMS = ["ebay", "vinted", "etsy", "facebook", "poshmark", "mercari", "offerup", "thredup", "depop"] as const;
+
+const PLATFORM_ALIASES: Record<string, string> = {
+  fb: "facebook", "facebook marketplace": "facebook", marketplace: "facebook", fbmp: "facebook",
+  posh: "poshmark", "offer up": "offerup", "thred up": "thredup", "thred-up": "thredup", "offer-up": "offerup",
+};
+
+/** "Facebook Marketplace", "posh", "OfferUp" → the platform id, or null. */
+export function normalizePlatformWord(v: unknown): string | null {
+  const w = String(v ?? "").trim().toLowerCase();
+  const id = PLATFORM_ALIASES[w] ?? w.replace(/\s+/g, "");
+  return (SWITCH_PLATFORMS as readonly string[]).includes(id) ? id : null;
+}
+
+function normalizeOnOff(v: unknown): boolean | null {
+  if (v === true || v === false) return v;
+  const w = String(v ?? "").trim().toLowerCase();
+  if (["on", "true", "yes", "1", "list", "post"].includes(w)) return true;
+  if (["off", "false", "no", "0", "remove", "pull", "delist"].includes(w)) return false;
+  return null;
+}
+
+export type SetPlatformResult = {
+  item_id: string;
+  item: string;
+  platform: string;
+  platform_name: string;
+  wanted: boolean;
+  outcome: "already_live" | "todo_post" | "already_off" | "dropped_draft" | "todo_pull";
+  task_id: string | null;
+  task_title: string | null;
+};
+
+export function setPlatformSay(r: SetPlatformResult): string {
+  switch (r.outcome) {
+    case "already_live": return `${r.item} is switched on for ${r.platform_name}, and it's already live there.`;
+    case "todo_post": return r.platform === "ebay"
+      ? `Switched ${r.platform_name} on for ${r.item}. Open the item in Resale HQ and tap Post to eBay (or flip the eBay switch) and the app posts it. It's on the to-do list.`
+      : `Switched ${r.platform_name} on for ${r.item}. It's on the to-do list to post; the listing text is ready under "Post it ourselves" on the item page.`;
+    case "already_off": return `${r.item} is switched off for ${r.platform_name}. It wasn't listed there, so nothing to pull.`;
+    case "dropped_draft": return `Switched ${r.platform_name} off for ${r.item} and dropped the draft that never went up.`;
+    case "todo_pull": return r.platform === "ebay"
+      ? `Switched ${r.platform_name} off for ${r.item}. Flip the eBay switch off in the app (or tap End listing) and the app ends it. It's on the to-do list.`
+      : `Switched ${r.platform_name} off for ${r.item}. It's still up until someone ends it in the ${r.platform_name} app; that's on the to-do list.`;
+  }
+}
+
+export type FoundItem = { item_id: string; name: string; status: string; category: string; brand: string | null; size: string | null; asking: number; owner: string | null };
+
+export function findItemsSay(items: FoundItem[], query: string | null): string {
+  if (items.length === 0) return query ? `No item matching "${query}". Try a shorter word, or the brand.` : "No unsold items yet.";
+  if (items.length === 1) return `Found it: ${items[0].name}.`;
+  const names = items.slice(0, 5).map(i => i.name).join("; ");
+  return `${items.length} matches${query ? ` for "${query}"` : ""}: ${names}${items.length > 5 ? "; and more" : ""}. Which one?`;
+}
+
+export type ItemDetailRow = {
+  item: { item_id: string; name: string; status: string; category: string; brand: string | null; size: string | null; condition: string | null; asking: number; floor_price: number | null; purchase_cost: number; owner: string | null };
+  switches: Record<string, boolean>;
+  listings: { listing_id: string; platform: string; status: string; list_price: number; url: string | null }[];
+  pending_platform_todos: { task_id: string; kind: string; platform: string | null; title: string }[];
+  comps: { platform: string; title: string; price: number; shipping: number | null; url: string | null; condition: string | null; kind: "active" | "sold"; source: string; captured_at: string }[];
+  photo_paths: string[];
+};
+
+export type ItemDetail = {
+  item: ItemDetailRow["item"];
+  platforms: { platform: string; platform_name: string; on: boolean; live: boolean; listing_id: string | null; list_price: number | null; url: string | null; todo: string | null }[];
+  comps: {
+    count: number;
+    lowest: { title: string; price: number; shipping: number | null; platform: string; url: string | null } | null;
+    typical: number | null;
+    low: number | null;
+    high: number | null;
+    verdict: "below" | "comparable" | "above" | null;
+    sentence: string | null;
+    /** Up to five closest-priced comps with links, cheapest first, for "show me the links". */
+    links: { title: string; price: number; shipping: number | null; platform: string; url: string; kind: string }[];
+  };
+  /** Paste-ready text for each platform without an API (clean, buyer-facing). ThredUp has none. */
+  listing_text: Record<string, ListingCopy>;
+  photos: string[];
+};
+
+/** Turns the raw assistant_item row into what the assistant reads: switch states, comp summary, paste-ready text. */
+export function buildItemDetail(row: ItemDetailRow, photoUrl: (path: string) => string): ItemDetail {
+  const asking = num(row.item.asking);
+  const liveBy = new Map(row.listings.map(l => [l.platform, l]));
+  const todoBy = new Map(row.pending_platform_todos.filter(t => t.platform).map(t => [t.platform as string, t.title]));
+  const platforms = (SWITCH_PLATFORMS as readonly string[]).map(p => {
+    const l = liveBy.get(p) ?? null;
+    const on = p in row.switches ? row.switches[p] : Boolean(l);
+    return { platform: p, platform_name: platformName(p), on, live: Boolean(l), listing_id: l?.listing_id ?? null, list_price: l ? num(l.list_price) : null, url: l?.url ?? null, todo: todoBy.get(p) ?? null };
+  });
+
+  const comps = row.comps.map(c => ({ ...c, price: num(c.price), shipping: c.shipping === null ? null : num(c.shipping) }));
+  const summary = summarizeComps(comps, asking > 0 ? asking : null);
+  const withLinks = comps.filter(c => c.url);
+  const ref = summary.typical ?? asking;
+  const links = [...withLinks]
+    .sort((a, b) => Math.abs(a.price - ref) - Math.abs(b.price - ref))
+    .slice(0, 5)
+    .sort((a, b) => a.price - b.price)
+    .map(c => ({ title: c.title, price: c.price, shipping: c.shipping, platform: c.platform, url: c.url as string, kind: c.kind }));
+
+  const copyItem = { name: row.item.name, category: row.item.category, brand: row.item.brand, size: row.item.size, condition: row.item.condition, target_price: asking };
+  const listing_text: Record<string, ListingCopy> = {};
+  for (const p of MANUAL_PLATFORMS) {
+    const copy = buildListingCopy(p.id, copyItem);
+    if (copy) listing_text[p.id] = copy;
+  }
+
+  return {
+    item: row.item,
+    platforms,
+    comps: {
+      count: summary.count,
+      lowest: summary.lowest ? { title: summary.lowest.title, price: summary.lowest.price, shipping: summary.lowest.shipping, platform: summary.lowest.platform, url: summary.lowest.url } : null,
+      typical: summary.typical,
+      low: summary.low,
+      high: summary.high,
+      verdict: summary.verdict,
+      sentence: asking > 0 ? verdictSentence(summary, asking, money) : null,
+      links,
+    },
+    listing_text,
+    photos: row.photo_paths.map(photoUrl),
+  };
+}
+
+export function itemDetailSay(d: ItemDetail): string {
+  const on = d.platforms.filter(p => p.on).map(p => p.platform_name + (p.live ? "" : " (not up yet)"));
+  const where = on.length ? `Switched on: ${on.join(", ")}.` : "Not switched on anywhere yet.";
+  if (d.comps.count === 0) return `${d.item.name}: ${where} No comps recorded yet; search for similar listings and send them with add_comp.`;
+  const low = d.comps.lowest ? ` Lowest right now is ${money(d.comps.lowest.price)}${d.comps.lowest.platform ? ` on ${platformName(d.comps.lowest.platform)}` : ""}.` : "";
+  const typical = d.comps.typical !== null ? ` Typical is ${money(d.comps.typical)} across ${d.comps.count} comps.` : "";
+  return `${d.item.name}: ${where}${low}${typical}${d.comps.sentence ? " " + d.comps.sentence : ""}`;
 }

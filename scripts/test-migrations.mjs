@@ -631,5 +631,42 @@ check((await as(C, "select count(*)::int as n from public.item_platform_gaps whe
 await as(A, `insert into public.listings (household_id, item_id, platform, status, list_price, created_by) values ($1, $2, 'mercari', 'active', 32, $3)`, [hA, itemW, A]);
 check((await as(A, "select count(*)::int as n from public.item_platform_gaps where item_id = $1 and platform = 'mercari'", [itemW])).rows[0].n === 0, "a live listing closes the needs_listing gap");
 
+// --- Assistant switches and comps (20261101040000) -------------------------------------------------
+{
+  const itemS = (await as(A, `insert into public.inventory_items (household_id, created_by, name, brand, floor_price, target_price) values ($1, $2, 'Air Max 90 sneakers', 'Nike', 30, 60) returning id`, [hA, A])).rows[0].id;
+  const found = (await asAnon("select public.assistant_find_items($1, 'nike') as v", [token2])).rows[0].v;
+  check(found.some(i => i.item_id === itemS), "assistant can find an unlisted item by brand");
+  const poshL = (await as(A, `insert into public.listings (household_id, item_id, platform, status, list_price, created_by) values ($1, $2, 'poshmark', 'active', 60, $3) returning id`, [hA, itemS, A])).rows[0].id;
+
+  const on = (await asAnon("select public.assistant_set_platform($1, $2, 'mercari', true) as v", [token2, itemS])).rows[0].v;
+  check(on.outcome === "todo_post" && on.task_id, "switching Mercari on writes a post to-do");
+  const again = (await asAnon("select public.assistant_set_platform($1, $2, 'mercari', true) as v", [token2, itemS])).rows[0].v;
+  check(again.task_id === on.task_id, "switching on twice doesn't add a second to-do");
+  const off = (await asAnon("select public.assistant_set_platform($1, $2, 'poshmark', false) as v", [token2, itemS])).rows[0].v;
+  check(off.outcome === "todo_pull", "switching off a live Poshmark listing writes a pull to-do");
+  check((await db.query("select listing_id, requested_by, kind from public.agent_tasks where id = $1", [off.task_id])).rows[0].listing_id === poshL, "pull to-do points at the live listing");
+  const back = (await asAnon("select public.assistant_set_platform($1, $2, 'poshmark', true) as v", [token2, itemS])).rows[0].v;
+  check(back.outcome === "already_live" && (await db.query("select status from public.agent_tasks where id = $1", [off.task_id])).rows[0].status === "cancelled",
+    "switching back on cancels the pull to-do");
+  check((await db.query("select actor_agent from public.activity_log where action = 'platform_on' order by id desc limit 1")).rows[0].actor_agent === "muse", "switch flips are attributed to the assistant");
+  await expectError(() => asAnon("select public.assistant_set_platform($1, $2, 'craigslist', true)", [token2, itemS]), "unknown platforms are rejected", /Unknown platform/);
+
+  const comp = (await asAnon("select public.assistant_add_comp($1, $2, 'ebay', 'Nike Air Max 90 size 10', 40, 0, 'https://www.ebay.com/itm/123', 'sold') as v", [token2, itemS])).rows[0].v;
+  const comp2 = (await asAnon("select public.assistant_add_comp($1, $2, 'ebay', 'Nike Air Max 90 size 10', 38, 0, 'https://www.ebay.com/itm/123', 'sold') as v", [token2, itemS])).rows[0].v;
+  check(comp.comp_id === comp2.comp_id, "the same link updates the comp instead of duplicating it");
+  await expectError(() => asAnon("select public.assistant_add_comp($1, $2, 'ebay', 'x', 5, null, 'http://insecure.example')", [token2, itemS]), "comp links must be https", /https/);
+
+  const detail = (await asAnon("select public.assistant_item($1, $2) as v", [token2, itemS])).rows[0].v;
+  check(detail.switches.mercari === true && detail.switches.poshmark === true && detail.comps.length === 1 && Number(detail.comps[0].price) === 38,
+    "assistant_item returns switches and comps");
+
+  // Another household's item is invisible to this key.
+  const itemB = (await as(B, `insert into public.inventory_items (household_id, created_by, name) values ($1, $2, 'B only') returning id`, [hB, B])).rows[0].id;
+  await expectError(() => asAnon("select public.assistant_item($1, $2)", [token2, itemB]), "assistant cannot read another household's item", /Item not found/);
+  await expectError(() => asAnon("select public.assistant_set_platform($1, $2, 'ebay', true)", [token2, itemB]), "assistant cannot flip another household's switches", /Item not found/);
+  await expectError(() => asAnon("select public.assistant_add_comp($1, $2, 'ebay', 'x', 5)", [token2, itemB]), "assistant cannot add comps to another household's item", /Item not found/);
+  await expectError(() => asAnon("select public.assistant_item($1, $2)", ["rhq_" + "x".repeat(43), itemS]), "a bad key gets nothing", /Invalid assistant key|not valid/);
+}
+
 console.log(failures ? `${failures} FAILED` : "ALL PASSED");
 process.exit(failures ? 1 : 0);

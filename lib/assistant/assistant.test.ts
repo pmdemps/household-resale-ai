@@ -230,3 +230,63 @@ test("offers say whose thing it is and who was asked", () => {
   assert.match(say, /\$30\.00 for Boots \(the other household member's\) on Vinted/);
   assert.match(say, /Lauren has been asked about it/);
 });
+
+// --- Platform switches and comps for the assistant ------------------------------------------------
+import { buildItemDetail, normalizePlatformWord, setPlatformSay, type ItemDetailRow } from "./protocol.ts";
+
+const ITEM = "11111111-2222-3333-4444-555555555555";
+
+test("set_platform accepts everyday words for platforms and on/off", () => {
+  assert.deepEqual(parseAction({ action: "set_platform", item_id: ITEM, platform: "Facebook Marketplace", on: "off" }), { action: "set_platform", item_id: ITEM, platform: "facebook", on: false });
+  assert.equal((parseAction({ action: "set_platform", item_id: ITEM, platform: "posh", on: true }) as { platform: string }).platform, "poshmark");
+  assert.equal(normalizePlatformWord("Offer Up"), "offerup");
+  assert.equal(normalizePlatformWord("craigslist"), null);
+  assert.throws(() => parseAction({ action: "set_platform", item_id: ITEM, platform: "craigslist", on: true }), BadRequest);
+  assert.throws(() => parseAction({ action: "set_platform", item_id: ITEM, platform: "ebay", on: "maybe" }), BadRequest);
+});
+
+test("add_comp needs a title, a price and an https link", () => {
+  const a = parseAction({ action: "add_comp", item_id: ITEM, title: "Nike Air Max 90 size 10", price: "$40", shipping: 0, url: "https://www.ebay.com/itm/1", platform: "eBay", kind: "sold" });
+  assert.equal((a as { price: number }).price, 40);
+  assert.equal((a as { platform: string }).platform, "ebay");
+  assert.equal((a as { kind: string }).kind, "sold");
+  assert.throws(() => parseAction({ action: "add_comp", item_id: ITEM, title: "x", price: 5, url: "http://insecure.example" }), BadRequest);
+  assert.throws(() => parseAction({ action: "add_comp", item_id: ITEM, price: 5 }), BadRequest);
+});
+
+test("switch replies say what happens next, plainly", () => {
+  const base = { item_id: ITEM, item: "Nike Air Max 90", platform: "poshmark", platform_name: "Poshmark", wanted: false, task_id: "t", task_title: "Pull it" };
+  assert.match(setPlatformSay({ ...base, outcome: "todo_pull" }), /still up until someone ends it in the Poshmark app/);
+  assert.match(setPlatformSay({ ...base, platform: "ebay", platform_name: "eBay", wanted: true, outcome: "todo_post" }), /Post to eBay/);
+  assert.doesNotMatch(setPlatformSay({ ...base, outcome: "todo_pull" }), /fuck|shit/i);
+});
+
+test("item detail: switches, comps verdict with closest links, paste-ready text", () => {
+  const row: ItemDetailRow = {
+    item: { item_id: ITEM, name: "Air Max 90", status: "listed", category: "Shoes", brand: "Nike", size: "10", condition: "Good", asking: 200, floor_price: 30, purchase_cost: 0, owner: null },
+    switches: { poshmark: false, mercari: true },
+    listings: [{ listing_id: "L1", platform: "poshmark", status: "active", list_price: 200, url: null }],
+    pending_platform_todos: [{ task_id: "T1", kind: "delist", platform: "poshmark", title: "Pull it off Poshmark" }],
+    comps: [
+      { platform: "ebay", title: "A", price: 38, shipping: 0, url: "https://www.ebay.com/itm/1", condition: null, kind: "active", source: "ebay", captured_at: "" },
+      { platform: "ebay", title: "B", price: 42, shipping: 8, url: "https://www.ebay.com/itm/2", condition: null, kind: "active", source: "ebay", captured_at: "" },
+      { platform: "mercari", title: "C", price: 45, shipping: null, url: "https://www.mercari.com/us/item/3", condition: null, kind: "sold", source: "manual", captured_at: "" },
+      { platform: "other", title: "D", price: 300, shipping: null, url: null, condition: null, kind: "active", source: "manual", captured_at: "" },
+    ],
+    photo_paths: ["h/i/a.jpg"],
+  };
+  const d = buildItemDetail(row, p => `https://cdn.example/${p}`);
+  const posh = d.platforms.find(p => p.platform === "poshmark")!;
+  assert.equal(posh.on, false);
+  assert.equal(posh.live, true);
+  assert.equal(posh.todo, "Pull it off Poshmark");
+  assert.equal(d.platforms.find(p => p.platform === "mercari")!.on, true);
+  assert.equal(d.platforms.find(p => p.platform === "ebay")!.on, false);
+  assert.equal(d.comps.lowest?.price, 38);
+  assert.equal(d.comps.verdict, "above");
+  assert.match(d.comps.sentence ?? "", /above the typical/);
+  assert.equal(d.comps.links.length, 3, "only comps with links");
+  assert.deepEqual(d.comps.links.map(l => l.price), [38, 42, 45]);
+  assert.ok(d.listing_text.mercari && d.listing_text.offerup && !d.listing_text.thredup);
+  assert.equal(d.photos[0], "https://cdn.example/h/i/a.jpg");
+});
