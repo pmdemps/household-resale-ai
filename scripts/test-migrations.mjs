@@ -387,5 +387,131 @@ await expectError(() => as(A, "update public.assistant_keys set revoked_at = nul
 check((await as(B, "delete from public.assistant_keys where id = $1 returning id", [key.id])).rows.length === 0, "member (non-admin) cannot delete a key");
 check((await as(A, "delete from public.assistant_keys where id = $1 returning id", [key.id])).rows.length === 1, "admin deletes a key");
 
+// --- phone notifications (web push). A and B are members of hA, C is not ---
+const vapidPub = "B" + "v".repeat(86);
+const vapidPriv = "k".repeat(43);
+const p256 = "B" + "p".repeat(86);
+const authKey = "a".repeat(22);
+const endA = "https://web.push.apple.com/QA-phone";
+const endB = "https://web.push.apple.com/QB-phone";
+const queued = async (where = "true") => (await db.query(`select count(*)::int as n from public.push_queue where ${where}`)).rows[0].n;
+const lit = arr => `{${arr.map(e => `"${e}"`).join(",")}}`;
+
+await expectError(() => as(A, "select household_id from public.push_config"), "members cannot read push settings (VAPID private key, dispatch token)", /permission denied/);
+await expectError(() => asAnon("select household_id from public.push_config"), "anon cannot read push settings", /permission denied/);
+await expectError(() => as(A, "insert into public.push_config (household_id, vapid_public_key, vapid_private_key) values ($1, $2, $3)", [hA, vapidPub, vapidPriv]),
+  "clients cannot write push settings directly", /permission denied/);
+await expectError(() => asAnon("select public.push_prepare($1, $2, $3)", [hA, vapidPub, vapidPriv]), "anon cannot set up notifications", /permission denied/);
+await expectError(() => as(C, "select public.push_prepare($1, $2, $3)", [hA, vapidPub, vapidPriv]), "non-member cannot set up another household's notifications", /Household not found/);
+await expectError(() => as(A, "select public.push_subscribe($1, $2, $3, $4, 'iPhone')", [hA, endA, p256, authKey]),
+  "a phone cannot subscribe before the household has a key pair", /not set up/);
+const pubKey1 = (await as(A, "select public.push_prepare($1, $2, $3) as k", [hA, vapidPub, vapidPriv])).rows[0].k;
+const pubKey2 = (await as(B, "select public.push_prepare($1, $2, $3) as k", [hA, "C" + "w".repeat(86), "m".repeat(43)])).rows[0].k;
+check(pubKey1 === vapidPub && pubKey2 === vapidPub, "the household keeps its first VAPID key pair");
+await expectError(() => as(B, "select public.push_prepare($1, 'not a key', $2)", [hB, vapidPriv]), "a malformed VAPID key is refused", /check constraint/);
+
+await as(A, "insert into public.agent_tasks (household_id, kind, title, requested_by) values ($1, 'other', 'Nobody subscribed yet', 'test')", [hA]);
+check(await queued() === 0, "nothing is queued while no phone has notifications on");
+await expectError(() => as(A, "insert into public.push_subscriptions (household_id, user_id, endpoint, p256dh, auth) values ($1, $2, $3, $4, $5)", [hA, A, endA, p256, authKey]),
+  "clients cannot write subscriptions directly", /permission denied/);
+const subA = (await as(A, "select public.push_subscribe($1, $2, $3, $4, 'iPhone', 'https://resale.example.com') as id", [hA, endA, p256, authKey])).rows[0].id;
+check(typeof subA === "string", "member turns on notifications for their phone");
+await as(A, "select public.push_subscribe($1, $2, $3, $4, 'iPhone', 'https://resale.example.com')", [hA, endA, p256, authKey]);
+check((await as(A, "select count(*)::int as n from public.activity_log where action = 'push_enabled' and entity_id = $1", [subA])).rows[0].n === 1,
+  "re-saving the same phone does not repeat the activity entry");
+await as(B, "select public.push_subscribe($1, $2, $3, $4, 'iPhone', 'https://resale.example.com')", [hA, endB, p256, authKey]);
+await expectError(() => as(C, "select public.push_subscribe($1, $2, $3, $4)", [hA, "https://web.push.apple.com/QC-intruder", p256, authKey]),
+  "non-member cannot add a phone to another household", /Household not found/);
+await expectError(() => asAnon("select public.push_subscribe($1, $2, $3, $4)", [hA, "https://web.push.apple.com/QAnon", p256, authKey]), "anon cannot add a phone", /permission denied/);
+await expectError(() => as(A, "select public.push_subscribe($1, 'http://push.example.com/x', $2, $3)", [hA, p256, authKey]), "a push endpoint must be https", /check constraint/);
+await expectError(() => as(A, "select public.push_subscribe($1, $2, 'short', $3)", [hA, "https://web.push.apple.com/QBad", authKey]), "push keys must be well formed", /check constraint/);
+await expectError(() => as(A, "select public.push_subscribe($1, $2, $3, $4, 'iPad', 'https://x.example.com/path')", [hA, "https://web.push.apple.com/QOrigin", p256, authKey]),
+  "the app address must be a bare origin", /check constraint/);
+const seenDevices = (await as(B, "select user_id, device_label, last_success_at from public.push_subscriptions where household_id = $1 order by created_at", [hA])).rows;
+check(seenDevices.length === 2 && seenDevices.every(d => d.device_label === "iPhone"), "co-members see which phones have notifications on");
+await expectError(() => as(B, "select endpoint from public.push_subscriptions"), "push endpoints are not readable by clients", /permission denied/);
+await expectError(() => as(B, "select p256dh, auth from public.push_subscriptions"), "push keys are not readable by clients", /permission denied/);
+check((await as(C, "select id from public.push_subscriptions")).rows.length === 0, "non-member sees no notification devices");
+await expectError(() => asAnon("select id from public.push_subscriptions"), "anon cannot see notification devices", /permission denied/);
+await expectError(() => as(A, "select id from public.push_queue"), "clients cannot read the push queue", /permission denied/);
+await expectError(() => as(A, "insert into public.push_queue (household_id, kind) values ($1, 'test')", [hA]), "clients cannot write the push queue", /permission denied/);
+
+// Queueing. There is no pg_net in this database, so rows wait for a dispatcher.
+await as(A, "insert into public.agent_tasks (household_id, kind, title, requested_by) values ($1, 'message_reply', 'Buyer message on Vinted: still available?', 'gmail-watcher')", [hA]);
+check(await queued(`household_id = '${hA}' and kind = 'task' and claimed_at is null`) === 1, "a new pending to-do is queued for the phones");
+await as(A, "insert into public.agent_tasks (household_id, kind, title, requested_by, status) values ($1, 'other', 'Already handled', 'test', 'done')", [hA]);
+check(await queued(`household_id = '${hA}'`) === 1, "a to-do that is not pending is not queued");
+await as(B, "insert into public.agent_tasks (household_id, kind, title, requested_by) values ($1, 'other', 'B house to-do', 'test')", [hB]);
+check(await queued(`household_id = '${hB}'`) === 0, "a household with no phones set up queues nothing");
+
+// Dispatch: the database hands the app the household's token; nothing works without it.
+const dispatchToken = (await db.query("select dispatch_token from public.push_config where household_id = $1", [hA])).rows[0].dispatch_token;
+check(/^[0-9a-f]{64}$/.test(dispatchToken), "each household gets a 64-hex-character dispatch token");
+await expectError(() => asAnon("select public.push_claim($1, $2)", [hA, "0".repeat(64)]), "a wrong dispatch token is refused", /Invalid dispatch token/);
+await expectError(() => asAnon("select public.push_claim($1, $2)", [hA, "not-a-token"]), "a malformed dispatch token is refused", /Invalid dispatch token/);
+await expectError(() => asAnon("select public.push_claim($1, $2)", [hB, dispatchToken]), "a token only works for its own household", /Invalid dispatch token/);
+await expectError(() => asAnon("select public.push_check_token($1, $2)", [hA, dispatchToken]), "anon cannot call the token check directly", /permission denied/);
+const claim1 = (await asAnon("select public.push_claim($1, $2) as v", [hA, dispatchToken])).rows[0].v;
+check(claim1.items.length === 1 && claim1.items[0].kind === "task" && claim1.items[0].task.title === "Buyer message on Vinted: still available?" && claim1.items[0].task.status === "pending",
+  "the dispatcher claims the waiting to-do");
+check(claim1.subscriptions.length === 2 && claim1.subscriptions.every(s => s.endpoint && s.p256dh && s.auth) && claim1.vapid_private_key === vapidPriv && claim1.origin === "https://resale.example.com",
+  "the claim carries the household's phones, key pair and address");
+check(Number(claim1.pending_count) > 0, "the claim carries the pending count for the app-icon badge");
+check((await asAnon("select public.push_claim($1, $2) as v", [hA, dispatchToken])).rows[0].v.items.length === 0, "a claimed row is never sent twice");
+
+// Test buzz: only to the member who asked.
+check((await as(A, "select public.push_send_test($1) as n", [hA])).rows[0].n === 1, "a test is queued for the member's phone");
+await expectError(() => as(C, "select public.push_send_test($1)", [hA]), "non-member cannot send a test to another household", /Household not found/);
+const claim2 = (await asAnon("select public.push_claim($1, $2) as v", [hA, dispatchToken])).rows[0].v;
+check(claim2.items.length === 1 && claim2.items[0].kind === "test" && claim2.items[0].target_user === A, "a test is addressed to the member who asked");
+
+// Reporting back after sending.
+await expectError(() => asAnon("select public.push_report($1, $2, $3::text[], $4::text[])", [hA, "f".repeat(64), lit([endA]), lit([])]), "a report needs the dispatch token", /Invalid dispatch token/);
+const report = (await asAnon("select public.push_report($1, $2, $3::text[], $4::text[]) as v", [hA, dispatchToken, lit([endB]), lit([endA])])).rows[0].v;
+check(report.removed === 1 && report.delivered === 1, "dead phones are forgotten and delivered ones are marked");
+check((await as(A, "select last_success_at from public.push_subscriptions where id = $1", [subA])).rows[0].last_success_at !== null, "a delivered phone shows when it last buzzed");
+check((await as(A, "select count(*)::int as n from public.push_subscriptions where household_id = $1", [hA])).rows[0].n === 1, "the dead phone is gone");
+
+// The real path: with pg_net present, the trigger asks the app to send (once per transaction) and a failed
+// request never blocks the to-do. This stand-in for net.http_post records what pg_net would send.
+await db.exec(`
+  create schema if not exists net;
+  create table if not exists net.sent (id serial primary key, url text, body jsonb, headers jsonb, timeout_milliseconds int);
+  create or replace function net.http_post(url text, body jsonb default '{}'::jsonb, params jsonb default '{}'::jsonb,
+      headers jsonb default '{}'::jsonb, timeout_milliseconds integer default 2000)
+  returns bigint language plpgsql as $$
+  begin
+    if url like 'https://down.example.com%' then raise exception 'connection refused'; end if;
+    insert into net.sent (url, body, headers, timeout_milliseconds) values (url, body, headers, timeout_milliseconds);
+    return lastval();
+  end $$;
+`);
+const sentCount = async () => (await db.query("select count(*)::int as n from net.sent")).rows[0].n;
+await as(A, "insert into public.agent_tasks (household_id, kind, title, requested_by) values ($1, 'other', 'Confirm sale: thing on Vinted for $5', 'gmail-watcher')", [hA]);
+const pokeReq = (await db.query("select url, body, headers from net.sent order by id desc limit 1")).rows[0];
+check(pokeReq?.url === "https://resale.example.com/api/push/dispatch" && pokeReq.body.household_id === hA && pokeReq.body.token === dispatchToken && pokeReq.headers["Content-Type"] === "application/json",
+  "a new to-do makes the database POST the household id and token to the app");
+const sentBefore = await sentCount();
+await db.exec(`reset role; select set_config('request.jwt.claim.sub', '${A}', false); set role authenticated;
+  begin;
+  insert into public.agent_tasks (household_id, kind, title, requested_by) values ('${hA}', 'delist', 'Pull it off eBay', 'system');
+  insert into public.agent_tasks (household_id, kind, title, requested_by) values ('${hA}', 'delist', 'Pull it off Etsy', 'system');
+  commit;
+  reset role;`);
+check(await sentCount() === sentBefore + 1, "two to-dos written together cause one request");
+await db.query("update public.push_config set app_origin = 'https://down.example.com' where household_id = $1", [hA]);
+const taskWhenDown = (await as(A, "insert into public.agent_tasks (household_id, kind, title, requested_by) values ($1, 'other', 'Written while the app is down', 'test') returning id", [hA])).rows[0];
+check(Boolean(taskWhenDown?.id) && await queued(`task_id = '${taskWhenDown.id}' and claimed_at is null`) === 1, "a failed request never blocks the to-do; it waits in the queue");
+check((await asAnon("select public.push_claim($1, $2) as v", [hA, dispatchToken])).rows[0].v.items.length === 4, "the next dispatch picks up everything still waiting");
+await db.query("update public.push_config set app_origin = 'https://resale.example.com' where household_id = $1", [hA]);
+
+// Turning it off.
+check((await as(B, "select public.push_unsubscribe($1) as ok", [endA])).rows[0].ok === false, "a member cannot turn off someone else's phone");
+check((await as(A, "select public.push_unsubscribe($1) as ok", [endA])).rows[0].ok === true, "a member turns off their own phone");
+const pushLog = (await as(A, "select action from public.activity_log where entity_type = 'push_subscription' order by id")).rows.map(r => r.action);
+check(pushLog.filter(a => a === "push_enabled").length === 2 && pushLog.at(-1) === "push_disabled", "turning phones on and off shows in the activity feed");
+await as(A, "insert into public.agent_tasks (household_id, kind, title, requested_by) values ($1, 'other', 'After everyone turned it off', 'test')", [hA]);
+check(await queued(`household_id = '${hA}' and claimed_at is null`) === 0, "with no phones left, nothing is queued");
+
 console.log(failures ? `${failures} FAILED` : "ALL PASSED");
 process.exit(failures ? 1 : 0);

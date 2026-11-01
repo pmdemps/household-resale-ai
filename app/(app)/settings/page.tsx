@@ -7,6 +7,7 @@ import { ThemePicker } from "@/components/theme-toggle";
 import { THEME_COOKIE, parseTheme } from "@/lib/theme";
 import { MarketplaceConnections } from "@/components/marketplace-connections";
 import { AssistantAccess } from "@/components/assistant-keys";
+import { PushNotifications } from "@/components/push-notifications";
 import { loadMemberNames } from "@/lib/queries";
 
 const EXPORTS = [
@@ -34,6 +35,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <p className="mt-1 text-sm text-slate-400">Saved on this device only, so you each get your own.</p>
         <div className="mt-3"><ThemePicker initial={theme} /></div>
       </section>
+
+      <PushNotifications ctx={ctx} names={names} />
 
       <section className="surface p-5">
         <h2 className="text-base font-semibold text-white">Your name</h2>

@@ -33,7 +33,8 @@ Dashboard, items with location/size/condition/floor price, listings per platform
 ### Stage 2 — Offer watcher (email → app)
 - Scheduled agent reads Gmail for offer/sale emails from eBay, Vinted, Poshmark, Mercari, Depop.
 - Matches each to a listing, creates the `offers` row (`source = 'email'`) and an `offer_decision` task.
-- Push notification: "Kids' sneakers · $5.99 on Vinted · offer $3.99 · you'd get $3.99. Accept?"
+- ✅ Push notifications: every new pending to-do (offer, sale to confirm, buyer message, delist) buzzes each phone that turned it on in Settings → Phone buzzes, plus a count on the app icon. Works from the iPhone home-screen app (iOS 16.4+). Database trigger → `pg_net` → `/api/push/dispatch` → `web-push`; no env vars (`20261031010000_push_notifications.sql`, `docs/deploy.md` step 6).
+- Later: the profit math in the notification itself ("offer $3.99 · we'd get $3.99"), per-person quiet hours.
 - Needs: a server-side agent key (service role, never in the browser), real sample emails to build parsers against, dedupe by message ID.
 
 ### Stage 3 — Agent API + approval loop (first half ✅)
