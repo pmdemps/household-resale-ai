@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { cleanServiceKey, serviceKeyProblem } from "./service-key";
 
 /**
  * Service-role client (bypasses row-level security). Server only, and only for jobs that have no user
@@ -11,7 +12,13 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
  */
 export function createServiceClient(): SupabaseClient | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const key = cleanServiceKey(process.env.SUPABASE_SERVICE_ROLE_KEY);
   if (!url || !key) return null;
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
+}
+
+/** Why the configured service key can't work (bad paste), or null when it looks fine or isn't set. Never contains the key. */
+export function serviceKeyConfigProblem(): string | null {
+  const key = cleanServiceKey(process.env.SUPABASE_SERVICE_ROLE_KEY);
+  return key ? serviceKeyProblem(key) : null;
 }
