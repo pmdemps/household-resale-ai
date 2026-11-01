@@ -186,7 +186,7 @@ export type Note = {
   updated_at: string;
 };
 
-/** A comparable listing someone else has up (or sold); see supabase/migrations/20261030030000_item_comps.sql. */
+/** A comparable listing someone else has up (or sold); see supabase/migrations/20261101020000_item_comps.sql. */
 export type ItemComp = {
   id: string;
   household_id: string;
