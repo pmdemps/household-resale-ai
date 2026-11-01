@@ -91,3 +91,4 @@ Also run the new migration in Supabase SQL Editor: `supabase/migrations/20261030
 - eBay refresh tokens last ~18 months; the app marks the connection "needs you to sign in again" when a refresh is rejected.
 - Buyer messages on offers are shown to you but never acted on automatically.
 - `X-EBAY-SIGNATURE` on account-deletion notices is not yet verified (TODO in `app/api/ebay/account-deletion/route.ts`); the endpoint only revokes our copy of one user's tokens.
+- **Check eBay prices** (the "What others sell this for" card on each item) only needs `EBAY_CLIENT_ID` and `EBAY_CLIENT_SECRET`, not a connected account. It uses the Browse API with an app token (default limit 5,000 calls/day). Sandbox has almost no listings, so real comps need **production** keys. It shows current Buy It Now listings. Sold prices need Marketplace Insights, which requires eBay's approval.

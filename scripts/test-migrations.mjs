@@ -149,6 +149,25 @@ check((await as(B, "delete from storage.objects where name = $1 returning id", [
 check((await as(A, "delete from storage.objects where name = $1 returning id", [photoPath])).rows.length === 1, "member deletes own household's photo file");
 await as(A, "delete from public.item_photos where id = $1", [photo.id]);
 
+// --- item comps (market comparables), B is not yet a member of A's household ---
+const comp = (await as(A, `insert into public.item_comps (household_id, item_id, platform, title, price, shipping, url)
+  values ($1, $2, 'ebay', 'Similar sneakers', 12.5, 4.25, 'https://www.ebay.com/itm/1') returning id, created_by, source, kind`, [hA, item])).rows[0];
+check(comp.created_by === A && comp.source === "manual" && comp.kind === "active", "member records a comp (defaults: manual, active, created_by = self)");
+check((await as(A, `insert into public.item_comps (household_id, item_id, source, platform, title, price, external_id, created_by, added_by_agent)
+  values ($1, $2, 'ebay', 'ebay', 'Live listing', 9.99, 'v1|1|0', null, null) returning id`, [hA, item])).rows.length === 1, "member stores eBay search results");
+await expectError(() => as(A, `insert into public.item_comps (household_id, item_id, source, platform, title, price, external_id)
+  values ($1, $2, 'ebay', 'ebay', 'Same listing again', 9.99, 'v1|1|0')`, [hA, item]), "the same eBay listing is stored once per item");
+check((await as(B, "select * from public.item_comps")).rows.length === 0, "non-member sees no comps");
+check((await asAnon("select * from public.item_comps").catch(() => ({ rows: [] }))).rows.length === 0, "anon sees no comps");
+await expectError(() => as(B, `insert into public.item_comps (household_id, item_id, title, price) values ($1, $2, 'x', 1)`, [hA, item]), "non-member cannot add comps to another household");
+await expectError(() => as(B, `insert into public.item_comps (household_id, item_id, title, price) values ($1, $2, 'x', 1)`, [hB, item]), "comp cannot point at another household's item");
+await expectError(() => as(A, `insert into public.item_comps (household_id, item_id, title, price, created_by) values ($1, $2, 'x', 1, $3)`, [hA, item, B]), "member cannot record a comp as someone else");
+await expectError(() => as(A, `insert into public.item_comps (household_id, item_id, title, price, url) values ($1, $2, 'x', 1, 'javascript:alert(1)')`, [hA, item]), "comp links must be https");
+await expectError(() => as(A, `insert into public.item_comps (household_id, item_id, title, price) values ($1, $2, 'x', -1)`, [hA, item]), "comp price cannot be negative");
+check((await as(B, "update public.item_comps set price = 0 returning id")).rows.length === 0, "non-member cannot edit comps");
+check((await as(B, "delete from public.item_comps returning id")).rows.length === 0, "non-member cannot delete comps");
+check((await as(A, "delete from public.item_comps where id = $1 returning id", [comp.id])).rows.length === 1, "member deletes a comp");
+
 await expectError(() => as(B, "select public.add_household_member_by_email($1, 'b@example.com')", [hA]), "non-admin cannot add members");
 check((await as(A, "select public.add_household_member_by_email($1, 'nobody@example.com') as ok", [hA])).rows[0].ok === false, "unknown email returns false");
 check((await as(A, "select public.add_household_member_by_email($1, 'B@Example.com') as ok", [hA])).rows[0].ok === true, "admin adds member by email (case-insensitive)");
