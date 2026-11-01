@@ -2,6 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { assistantKeyFromHeaders } from "@/lib/assistant/keys";
 import {
   BadRequest,
+  buildItemDetail,
+  findItemsSay,
+  itemDetailSay,
+  setPlatformSay,
   decisionSay,
   enrichOffers,
   handoffSay,
@@ -11,6 +15,9 @@ import {
   summarizeInbox,
   type AssistantAction,
   type DecisionResult,
+  type FoundItem,
+  type ItemDetailRow,
+  type SetPlatformResult,
   type HandoffResult,
   type Inbox,
   type RecordOfferResult,
@@ -21,6 +28,7 @@ import { isEbayConfigured } from "@/lib/ebay/config";
 import { respondToEbayOfferDecision } from "@/lib/ebay/respond";
 import { estimateFees } from "@/lib/fees";
 import { platformName } from "@/lib/platforms";
+import { publicPhotoUrl } from "@/lib/photos";
 import { createServiceClient } from "@/lib/supabase/service";
 import { money, num } from "@/lib/types";
 
@@ -31,7 +39,11 @@ export const maxDuration = 30;
 //
 //   GET  /api/assistant            what needs a decision (offers, to-dos) and the live listings; `?peek=1`
 //                                  leaves the "new since last check" watermark alone.
-//   POST /api/assistant            { action: decide | record_offer | record_sale | note | resolve_task | propose_task | hand_off, ... }
+//   GET  /api/assistant?find=nike  unsold items matching a name or brand (ids for the calls below)
+//   GET  /api/assistant?item_id=…  one item in full: platform switches, live listings, what others sell it for
+//                                  (lowest, typical, verdict, links) and paste-ready listing text per platform
+//   POST /api/assistant            { action: decide | record_offer | record_sale | note | resolve_task | propose_task | hand_off
+//                                    | set_platform | add_comp, ... }
 //
 // Credential: an assistant key from Settings, sent as `Authorization: Bearer <key>` (or `X-Assistant-Key`).
 // The key is checked inside the database functions, which also attribute every write to the member who owns
@@ -47,6 +59,8 @@ const json = (body: Json, status = 200) => NextResponse.json(body, { status, hea
 const HELP = {
   authentication: "Authorization: Bearer <assistant key from Settings>",
   get: "GET /api/assistant (add ?peek=1 to look without marking items as seen)",
+  find: "GET /api/assistant?find=<words from the item name or brand> → items with item_id (also finds things not listed anywhere yet)",
+  item: "GET /api/assistant?item_id=<id> → platform switches, live listings, comps (lowest, typical, verdict, links) and paste-ready listing text",
   post: {
     decide: { offer_id: "<from pending_offers>", decision: "accept | decline | counter", counter_amount: "number, for counter", override_floor: "true only when the member explicitly allows going below the floor price" },
     record_offer: { listing_id: "<from listings>", amount: "number", buyer: "optional", note: "optional, e.g. the email subject", source: "email | agent | manual" },
@@ -55,6 +69,8 @@ const HELP = {
     resolve_task: { task_id: "<from tasks>", status: "done | approved | rejected | cancelled" },
     propose_task: { kind: "message_reply | price_change | listing_draft | relist | other", title: "string", detail: "optional", item_id: "optional", listing_id: "optional" },
     hand_off: { to: "a household member's name (blank = the only other member)", offer_id: "<from pending_offers>", item_id: "<from listings>, when there is no offer" },
+    set_platform: { item_id: "<from find or listings>", platform: "ebay | mercari | poshmark | offerup | facebook | vinted | etsy | thredup | depop", on: "true to list it there, false to take it down" },
+    add_comp: { item_id: "<from find or listings>", title: "the other listing's title", price: "number (item price, not including shipping)", shipping: "optional number, 0 = free", url: "https link to the listing", platform: "where it's listed", kind: "active | sold", condition: "optional" },
   },
 };
 
@@ -82,7 +98,20 @@ export async function GET(request: NextRequest) {
   const key = assistantKeyFromHeaders(request.headers);
   if (!key) return unauthorized();
   try {
-    const peek = request.nextUrl.searchParams.get("peek") === "1";
+    const params = request.nextUrl.searchParams;
+    if (params.has("find")) {
+      const q = (params.get("find") ?? "").trim().slice(0, 100) || null;
+      const items = await callAssistantFunction<FoundItem[]>("assistant_find_items", { p_key: key, p_query: q });
+      return json({ ok: true, say: findItemsSay(items, q), items, help: HELP });
+    }
+    if (params.has("item_id")) {
+      const itemId = (params.get("item_id") ?? "").trim();
+      if (!/^[0-9a-f-]{36}$/i.test(itemId)) return failure(new BadRequest("item_id must be an id from find or listings (a UUID)."));
+      const row = await callAssistantFunction<ItemDetailRow>("assistant_item", { p_key: key, p_item_id: itemId });
+      const detail = buildItemDetail(row, publicPhotoUrl);
+      return json({ ok: true, say: itemDetailSay(detail), ...detail, help: HELP });
+    }
+    const peek = params.get("peek") === "1";
     const inbox = await loadInbox(key, !peek);
     const offers = enrichOffers(inbox.pending_offers, canAutoReplyOnEbay(inbox));
     return json({
@@ -145,6 +174,19 @@ export async function POST(request: NextRequest) {
           p_key: key, p_to: action.to, p_offer_id: action.offer_id, p_item_id: action.item_id,
         });
         return json({ ok: true, say: handoffSay(r, action.to), result: r });
+      }
+      case "set_platform": {
+        const r = await callAssistantFunction<SetPlatformResult>("assistant_set_platform", {
+          p_key: key, p_item_id: action.item_id, p_platform: action.platform, p_wanted: action.on,
+        });
+        return json({ ok: true, say: setPlatformSay(r), result: r });
+      }
+      case "add_comp": {
+        const r = await callAssistantFunction<{ comp_id: string; item_id: string }>("assistant_add_comp", {
+          p_key: key, p_item_id: action.item_id, p_platform: action.platform, p_title: action.title, p_price: action.price,
+          p_shipping: action.shipping, p_url: action.url, p_kind: action.kind, p_condition: action.condition, p_note: action.note,
+        });
+        return json({ ok: true, say: `Saved that comp (${money(action.price)}${action.shipping !== null ? ` + ${money(action.shipping)} shipping` : ""}) on the item.`, result: r });
       }
     }
   } catch (e) {

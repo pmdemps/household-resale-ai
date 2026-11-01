@@ -63,6 +63,22 @@ TO-DOS AND NOTES
 - "tasks" in the inbox are the household's to-dos (confirm a sale, take a listing down, answer a buyer). Read them to me when new. When I say one is done: POST {"action":"resolve_task","task_id":"<task_id>","status":"done"}.
 - "Note that…" / "remind us…" → POST {"action":"note","text":"<what I said>","item_id":"<optional item_id>"}.
 
+WHERE IT'S LISTED (platform switches)
+- Each item has an on/off switch per marketplace: ebay, mercari, poshmark, offerup, facebook, vinted, etsy, thredup, depop.
+- To find an item, even one not listed anywhere yet: GET <ADDRESS>?find=<a word from its name or brand>. If more than one matches, ask me which.
+- "Put the Nikes on Mercari" → POST {"action":"set_platform","item_id":"<item_id>","platform":"mercari","on":true}
+- "Take the Nikes off Poshmark" → POST {"action":"set_platform","item_id":"<item_id>","platform":"poshmark","on":false}
+- Relay the "say". Switching never posts or takes anything down by itself: it puts a "Post it on X" or "Pull it off X" to-do on the list for us (eBay gets posted or ended from the app). Only flip a switch when I tell you to.
+- "Where is the bike helmet listed?" → GET <ADDRESS>?item_id=<item_id> and read me the "platforms" (on, live, and any to-do).
+
+WHAT OTHERS SELL IT FOR (comps)
+- "What are these going for?" / "Am I priced right?" → GET <ADDRESS>?item_id=<item_id>. Read me the "say": lowest price right now, the typical price, and whether our asking price is below, comparable or above. If I ask for links, read me "comps.links" (title, price, and the link) so I can check them myself.
+- If there are no comps yet, offer to look. When you search the web for the same or very similar item (same brand, model, size, condition), send each good match: POST {"action":"add_comp","item_id":"<item_id>","title":"<their listing title>","price":<item price without shipping>,"shipping":<shipping or leave out>,"url":"<https link>","platform":"ebay|mercari|poshmark|…","kind":"active or sold"}. Up to about 8, closest matches only. Sold prices are the best signal; mark them "kind":"sold".
+- Never change our price yourself. If the comps say we're way off, tell me and ask. If I say change it, POST {"action":"propose_task","kind":"price_change","title":"Change <item> to $<price>","item_id":"<item_id>"}.
+
+LISTING TEXT
+- "Give me the Mercari listing for the helmet" → GET <ADDRESS>?item_id=<item_id> and send me "listing_text.mercari" (title, description, price) exactly as given, ready to paste. Photos are in "photos". Never post it yourself.
+
 HARD RULES
 - Never operate marketplace websites or apps for me. Do not log in to, click, accept, counter, decline, list or message on Vinted, Poshmark, Mercari, Depop, Facebook, Etsy or eBay. Vinted and others ban accounts for automation. Resale HQ talks to eBay through its official API when that is set up; everything else a human taps.
 - Never decide an offer, a price or a sale on your own, and never go below a floor price without my explicit words.
@@ -93,6 +109,25 @@ All requests: `Authorization: Bearer <key>` (or `X-Assistant-Key: <key>`). JSON 
 
 Each pending offer's `item` also carries `owner` (`{ id, name, is_you }`, or null when it's shared) and the offer carries `asked` (who it was handed to, or null). `members` lists everyone in the household (`name` is null until they set one in Settings); listings carry `owner` too.
 
+**GET `/api/assistant?find=nike`**: unsold items whose name or brand matches (up to 15), with `item_id`. Finds things that aren't listed anywhere yet, which the inbox's `listings` doesn't include.
+
+**GET `/api/assistant?item_id=<id>`**: one item in full.
+
+```json
+{
+  "ok": true,
+  "say": "Air Max 90: Switched on: Mercari (not up yet), Poshmark. Lowest right now is $38.00 on eBay. Typical is $42.00 across 3 comps. Your $60.00 is 43% above the typical $42.00. Expect lower offers, or explain what makes yours worth more.",
+  "item": { "item_id": "…", "name": "Air Max 90", "brand": "Nike", "size": "10", "asking": 60, "floor_price": 30, "owner": null },
+  "platforms": [{ "platform": "mercari", "platform_name": "Mercari", "on": true, "live": false, "todo": "Post \"Air Max 90\" on Mercari" }, "…"],
+  "comps": { "count": 3, "lowest": { "price": 38, "shipping": 0, "platform": "ebay", "url": "https://…" }, "typical": 42, "low": 38, "high": 45,
+             "verdict": "above", "sentence": "…", "links": [{ "title": "…", "price": 38, "url": "https://…", "kind": "active" }] },
+  "listing_text": { "mercari": { "title": "Nike Air Max 90 Size 10", "description": "…", "price": 60, "tips": ["…"] }, "poshmark": {…}, "…": {} },
+  "photos": ["https://…/item-photos/…jpg"]
+}
+```
+
+`comps.links` is up to five comps with links, closest to the typical price, cheapest first. `listing_text` is clean, buyer-facing text for every platform without an API (ThredUp has none: it's a mail-in bag).
+
 **POST `/api/assistant`** — one `action` per request:
 
 | action | fields | effect |
@@ -103,6 +138,8 @@ Each pending offer's `item` also carries `owner` (`{ id, name, is_you }`, or nul
 | `note` | `text`, optional `item_id` | Household note or item comment. |
 | `resolve_task` | `task_id`, `status` (`done` / `approved` / `rejected` / `cancelled`) | Closes a to-do. Offer to-dos are closed by `decide`, not here. |
 | `propose_task` | `kind` (`message_reply` / `price_change` / `listing_draft` / `relist` / `other`), `title`, optional `detail`, `item_id`, `listing_id` | Puts something on the household's to-do list. Same title within three days is not repeated. |
+| `set_platform` | `item_id`, `platform` (`ebay` / `mercari` / `poshmark` / `offerup` / `facebook` / `vinted` / `etsy` / `thredup` / `depop`; "posh", "Facebook Marketplace", "Offer Up" work too), `on` (`true` / `false`) | Flips the item's switch for the member. Writes a "Post *item* on X" or "Pull *item* off X" to-do (never twice), cancels the opposite one, or drops a draft that never went up. `result.outcome`: `todo_post`, `todo_pull`, `already_live`, `already_off`, `dropped_draft`. Never posts or ends anything itself. |
+| `add_comp` | `item_id`, `title`, `price`, optional `shipping` (0 = free), `url` (https only), `platform`, `kind` (`active` / `sold`), `condition`, `note` | Records a comparable listing the assistant found. The same link on the same item updates instead of duplicating. Shows on the item page's "What others sell this for" card, attributed to the assistant. |
 | `hand_off` | `offer_id` or `item_id`, optional `to` (a member's name, any case, first name is enough; blank = the only other member) | "That's Lauren's, go ask her": marks the item as theirs and buzzes only their phone. Does not decide anything; either member can still answer. `result.devices` is 0 when they have no phone notifications on. |
 
 Errors: `401 unauthorized` (bad or revoked key), `400 bad_request` (the message says which field), `404 not_found`, `409 already_done`, `409 below_floor` (hint explains `override_floor`).
