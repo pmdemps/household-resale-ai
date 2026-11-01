@@ -585,5 +585,19 @@ await as(A, "select public.decide_offer($1, 'declined')", [handOffer]);
 await expectError(() => as(A, "select public.handoff_item($1, $2, $3)", [hA, B, handOffer]), "an answered offer cannot be handed off", /already answered/);
 check((await as(B, "select public.handoff_item($1, $2, null, $3) as v", [hA, A, handItem])).rows[0].v.to.name === "Alex", "it works the other way round too");
 
+// --- More marketplaces (20261101010000): OfferUp and ThredUp listings, delist titles use real names.
+const itemM = (await as(A, `insert into public.inventory_items (household_id, created_by, name, floor_price) values ($1, $2, 'Cordless drill', 20) returning id`, [hA, A])).rows[0].id;
+const offerupL = (await as(A, `insert into public.listings (household_id, item_id, platform, status, list_price, created_by) values ($1, $2, 'offerup', 'active', 40, $3) returning id`, [hA, itemM, A])).rows[0].id;
+await as(A, `insert into public.listings (household_id, item_id, platform, status, list_price, created_by) values ($1, $2, 'mercari', 'active', 45, $3)`, [hA, itemM, A]);
+await as(A, `insert into public.listings (household_id, item_id, platform, status, list_price, created_by) values ($1, $2, 'thredup', 'active', 0, $3)`, [hA, itemM, A]);
+check(true, "OfferUp and ThredUp listings are allowed");
+await expectError(() => as(A, `insert into public.listings (household_id, item_id, platform, list_price, created_by) values ($1, $2, 'craigslist', 1, $3)`, [hA, itemM, A]),
+  "unknown platforms are still rejected", /check constraint/);
+await as(A, "select public.record_sale($1, 40)", [offerupL]);
+const delists = (await as(A, "select title from public.agent_tasks where item_id = $1 and kind = 'delist' order by title", [itemM])).rows.map(r => r.title);
+check(delists.length === 2 && delists.some(t => t.includes("Mercari")) && delists.some(t => t.includes("ThredUp")),
+  "selling on OfferUp queues delist to-dos for Mercari and ThredUp with proper names");
+check((await db.query("select public.platform_display_name('offerup') as n")).rows[0].n === "OfferUp", "OfferUp's display name");
+
 console.log(failures ? `${failures} FAILED` : "ALL PASSED");
 process.exit(failures ? 1 : 0);
