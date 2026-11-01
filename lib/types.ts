@@ -9,16 +9,16 @@ export type ListingStatus = (typeof LISTING_STATUSES)[number];
 export const OFFER_STATUSES = ["pending", "accepted", "declined", "countered", "expired", "withdrawn"] as const;
 export type OfferStatus = (typeof OFFER_STATUSES)[number];
 
-/** Plain words for the screen. The database keeps the raw status values above. */
+/** Words for the screen, in the household's own voice (see "App voice" in AGENTS.md). The database keeps the raw status values above. */
 export const ITEM_STATUS_LABELS: Record<ItemStatus, string> = {
-  researching: "Not listed yet",
-  draft: "Not listed yet",
+  researching: "Collecting dust",
+  draft: "Collecting dust",
   listed: "For sale",
-  pending_sale: "Sale pending",
-  sold: "Sold",
-  returned: "Returned",
-  donated: "Donated",
-  discarded: "Discarded",
+  pending_sale: "Almost gone",
+  sold: "Fucking sold",
+  returned: "Fucking returned",
+  donated: "Gave it away",
+  discarded: "Trashed",
 };
 export const itemStatusLabel = (status: string): string => ITEM_STATUS_LABELS[status as ItemStatus] ?? status.replace(/_/g, " ");
 
@@ -32,12 +32,12 @@ export const LISTING_STATUS_LABELS: Record<ListingStatus, string> = {
 export const listingStatusLabel = (status: string): string => LISTING_STATUS_LABELS[status as ListingStatus] ?? status.replace(/_/g, " ");
 
 export const OFFER_STATUS_LABELS: Record<OfferStatus, string> = {
-  pending: "Waiting on you",
-  accepted: "Accepted",
-  declined: "Declined",
+  pending: "Your move",
+  accepted: "Took it",
+  declined: "Told 'em to fuck off",
   countered: "Countered",
-  expired: "Expired",
-  withdrawn: "Withdrawn",
+  expired: "Fizzled out",
+  withdrawn: "They bailed",
 };
 export const offerStatusLabel = (status: string): string => OFFER_STATUS_LABELS[status as OfferStatus] ?? status.replace(/_/g, " ");
 
@@ -63,6 +63,8 @@ export type InventoryItem = {
   purchase_cost: number;
   target_price: number;
   floor_price: number | null;
+  /** Whose shit it is: a household member's user id, or null when it's ours. */
+  owner_user?: string | null;
   status: ItemStatus;
   notes: string | null;
   sold_price: number | null;

@@ -4,7 +4,7 @@ import { resolveTask } from "@/app/actions";
 import { OfferCard } from "@/components/offer-card";
 import { requireHousehold } from "@/lib/household";
 import { platformName } from "@/lib/platforms";
-import { loadMemberNames, loadNotes, loadOverview, loadPendingOffers } from "@/lib/queries";
+import { loadMemberNames, loadMembers, loadNotes, loadOverview, loadPendingOffers } from "@/lib/queries";
 import { NoteComposer, NotesList } from "@/components/notes";
 import { money, timeAgo } from "@/lib/types";
 import { ProfitBadge, toneOf } from "@/components/money";
@@ -12,7 +12,7 @@ import { profitSentence, signedMoney, type MonthPoint } from "@/lib/money";
 
 export default async function HomePage() {
   const ctx = await requireHousehold();
-  const [overview, offers, notes, names] = await Promise.all([loadOverview(ctx), loadPendingOffers(ctx), loadNotes(ctx, { limit: 3 }), loadMemberNames(ctx)]);
+  const [overview, offers, notes, names, members] = await Promise.all([loadOverview(ctx), loadPendingOffers(ctx), loadNotes(ctx, { limit: 3 }), loadMemberNames(ctx), loadMembers(ctx)]);
   const empty = overview.counts.unsold === 0 && overview.counts.sold === 0;
   const needsCount = offers.length + overview.tasks.length + overview.counts.needsListing;
 
@@ -20,38 +20,38 @@ export default async function HomePage() {
     <div className="space-y-8">
       <header className="flex items-center justify-between gap-3">
         <p className="truncate text-sm text-slate-500">{ctx.household.name}</p>
-        <Link href="/inventory/new" className="btn-primary"><Plus size={17} /> Add item</Link>
+        <Link href="/inventory/new" className="btn-primary"><Plus size={17} /> Add shit</Link>
       </header>
 
       {empty && (
         <section className="surface p-6">
-          <h2 className="text-lg font-semibold text-white">Start with one room</h2>
+          <h2 className="text-lg font-semibold text-white">Start with one fucking room</h2>
           <p className="mt-2 max-w-xl text-sm leading-6 text-slate-400">
-            Walk through a closet or the kids&apos; room and add each thing you want gone: what it is, size, condition, where it&apos;s stored, and
-            the lowest price you&apos;d take. Use &quot;Save &amp; add another&quot; to move fast.
+            Walk through a closet or the kids&apos; room and add every fucking thing you want gone: what it is, size, condition, where it&apos;s
+            hiding, and the lowest price you&apos;d take. Hit &quot;Save &amp; add more shit&quot; to bang them out fast.
           </p>
-          <Link href="/inventory/new" className="btn-primary mt-4"><Plus size={16} /> Add your first item</Link>
+          <Link href="/inventory/new" className="btn-primary mt-4"><Plus size={16} /> Add the first piece of crap</Link>
         </section>
       )}
 
-      {/* 1. How are we doing? */}
+      {/* 1. Are we fucking rich yet? */}
       <section aria-labelledby="q-doing">
-        <h1 id="q-doing" className="question">How are we doing?</h1>
+        <h1 id="q-doing" className="question">Are we fucking rich yet?</h1>
         <div className="mt-3">
           <MonthHero thisMonth={overview.thisMonth} lastMonth={overview.lastMonth} allTime={overview.profit} sold={overview.counts.sold} />
         </div>
       </section>
 
-      {/* 2. What needs us? */}
+      {/* 2. What needs our lazy asses? */}
       <section aria-labelledby="q-needs">
         <div className="flex items-baseline justify-between gap-3">
-          <h2 id="q-needs" className="question">What needs us?</h2>
-          <p className="text-sm text-slate-500">{needsCount === 0 ? "Nothing right now" : `${needsCount} thing${needsCount === 1 ? "" : "s"}`}</p>
+          <h2 id="q-needs" className="question">What needs our lazy asses?</h2>
+          <p className="text-sm text-slate-500">{needsCount === 0 ? "Not a fucking thing" : `${needsCount} thing${needsCount === 1 ? "" : "s"}`}</p>
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2 text-sm">
           <Link href="/inventory?status=open" className="surface inline-flex items-center gap-2 px-3 py-2 hover:bg-white/[0.03]">
-            <span className="font-semibold tabular-nums text-white">{overview.counts.unsold}</span> <span className="text-slate-400">to sell</span>
+            <span className="font-semibold tabular-nums text-white">{overview.counts.unsold}</span> <span className="text-slate-400">still here</span>
           </Link>
           <Link href="/inventory?status=listed" className="surface inline-flex items-center gap-2 px-3 py-2 hover:bg-white/[0.03]">
             <span className="font-semibold tabular-nums text-white">{overview.counts.activeListings}</span> <span className="text-slate-400">for sale, {money(overview.activeValue)} asked</span>
@@ -61,10 +61,10 @@ export default async function HomePage() {
         <div className="mt-3 space-y-3">
           {offers.length > 0 && (
             <div>
-              <OfferCard offer={offers[0]} />
+              <OfferCard offer={offers[0]} members={members} currentUser={ctx.userId} />
               {offers.length > 1 && (
                 <Link href="/offers" className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-link hover:underline">
-                  <HandCoins size={15} /> {offers.length - 1} more offer{offers.length - 1 === 1 ? "" : "s"} waiting <ArrowRight size={14} />
+                  <HandCoins size={15} /> {offers.length - 1} more offer{offers.length - 1 === 1 ? "" : "s"} to deal with <ArrowRight size={14} />
                 </Link>
               )}
             </div>
@@ -72,7 +72,7 @@ export default async function HomePage() {
 
           {overview.tasks.length > 0 && (
             <div className="surface p-4 sm:p-5">
-              <h3 className="flex items-center gap-2 text-base font-semibold text-white"><ListTodo size={17} className="text-link" /> To do</h3>
+              <h3 className="flex items-center gap-2 text-base font-semibold text-white"><ListTodo size={17} className="text-link" /> Shit to do</h3>
               <ul className="mt-2 divide-y divide-line">
                 {overview.tasks.map(t => (
                   <li key={t.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
@@ -97,7 +97,7 @@ export default async function HomePage() {
           {overview.needsListing.length > 0 && (
             <div className="surface p-4 sm:p-5">
               <div className="flex items-center justify-between">
-                <h3 className="flex items-center gap-2 text-base font-semibold text-white"><PackagePlus size={17} className="text-link" /> Not listed yet</h3>
+                <h3 className="flex items-center gap-2 text-base font-semibold text-white"><PackagePlus size={17} className="text-link" /> Collecting dust</h3>
                 {overview.counts.needsListing > overview.needsListing.length && (
                   <Link href="/inventory?status=unlisted" className="text-sm text-link hover:underline">All {overview.counts.needsListing}</Link>
                 )}
@@ -120,23 +120,23 @@ export default async function HomePage() {
 
           {needsCount === 0 && !empty && (
             <div className="surface flex items-center gap-3 p-4 text-sm text-slate-400">
-              <Sparkles size={18} className="shrink-0 text-link" /> All caught up. No offers waiting and everything is listed.
+              <Sparkles size={18} className="shrink-0 text-link" /> All caught up. No offers, everything&apos;s listed. Go pour yourself a fucking drink.
             </div>
           )}
         </div>
       </section>
 
-      {/* 3. What's new? */}
+      {/* 3. What the fuck happened? */}
       <section aria-labelledby="q-new">
-        <h2 id="q-new" className="question">What&apos;s new?</h2>
+        <h2 id="q-new" className="question">What the fuck happened?</h2>
         <div className="mt-3 grid gap-3 lg:grid-cols-2">
           <div className="surface p-4 sm:p-5">
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-semibold text-white">Recent sales</h3>
+              <h3 className="text-base font-semibold text-white">Shit we sold</h3>
               <Link href="/money" className="text-sm text-link hover:underline">Money</Link>
             </div>
             {overview.recentSales.length === 0 ? (
-              <p className="mt-2 text-sm text-slate-500">Nothing sold yet. The first sale shows up here.</p>
+              <p className="mt-2 text-sm text-slate-500">Nothing sold yet. First one shows up here, fingers fucking crossed.</p>
             ) : (
               <ul className="mt-2 divide-y divide-line">
                 {overview.recentSales.map(r => (
@@ -168,7 +168,7 @@ export default async function HomePage() {
 
         {overview.activity.length > 0 && (
           <details className="surface mt-3 p-4 sm:p-5">
-            <summary className="cursor-pointer text-sm font-medium text-slate-300">Everything that happened lately</summary>
+            <summary className="cursor-pointer text-sm font-medium text-slate-300">All the shit that went down lately</summary>
             <ul className="mt-3 space-y-2 text-sm">
               {overview.activity.map(a => (
                 <li key={a.id} className="flex justify-between gap-3">
@@ -192,15 +192,21 @@ function describe(action: string, d: Record<string, unknown>) {
   switch (action) {
     case "item_created": return `Added ${d.name ?? "an item"}`;
     case "listing_added": return `Listed on ${platformName(String(d.platform))}`;
-    case "offer_recorded": return `Offer of ${money(Number(d.amount))} recorded`;
-    case "offer_accepted": return `Accepted ${money(Number(d.amount))}`;
-    case "offer_declined": return `Declined ${money(Number(d.amount))}`;
+    case "offer_recorded": return `Got a ${money(Number(d.amount))} offer`;
+    case "offer_accepted": return `Took ${money(Number(d.amount))}`;
+    case "offer_declined": return `Told a ${money(Number(d.amount))} offer to fuck off`;
     case "offer_countered": return `Countered at ${money(Number(d.counter))}`;
     case "note_added": return "Posted a note";
     case "listing_drafted": return "Drafted listings" + (Array.isArray(d.platforms) ? ` for ${(d.platforms as string[]).map(platformName).join(" and ")}` : "");
     case "comment_added": return "Commented on an item";
-    case "member_added": return "Added a household member";
-    case "sale_recorded": return `Sold on ${platformName(String(d.platform))} for ${money(Number(d.salePrice))}`;
+    case "member_added": return "Added someone to the house";
+    case "sale_recorded": return `Sold on ${platformName(String(d.platform))} for ${money(Number(d.salePrice))}. Fuck yes.`;
+    case "task_proposed": return `Put "${String(d.title ?? "something")}" on the to-do list`;
+    case "task_done": return `Knocked out "${String(d.title ?? "a to-do")}"`;
+    case "assistant_key_created": return `Gave ${String(d.label ?? "an AI sidekick")} a key`;
+    case "assistant_key_revoked": return `Cut off ${String(d.label ?? "an AI sidekick")}'s key`;
+    case "push_enabled": return `Turned on buzzes for their ${String(d.device ?? "phone")}`;
+    case "push_disabled": return `Turned off buzzes for their ${String(d.device ?? "phone")}`;
     default: return action.replace(/_/g, " ");
   }
 }
@@ -222,8 +228,8 @@ function MonthHero({ thisMonth, lastMonth, allTime, sold }: { thisMonth: MonthPo
       </p>
       <p className="mt-2 text-sm text-slate-400">
         {thisMonth.sold === 0
-          ? `Nothing sold yet in ${monthName}.`
-          : `${thisMonth.sold} sold in ${monthName}, after fees, shipping and what you paid.`}
+          ? `Nothing sold yet in ${monthName}. Get your ass in gear.`
+          : `${thisMonth.sold} sold in ${monthName}. That's after fees, shipping and what we paid for the crap.`}
         {lastMonth && lastMonth.sold > 0 && (
           <> Last month: <span className={"font-semibold " + (toneOf(lastMonth.profit) === "bad" ? "text-bad" : toneOf(lastMonth.profit) === "good" ? "text-good" : "text-slate-300")}>{signedMoney(lastMonth.profit)}</span>.</>
         )}

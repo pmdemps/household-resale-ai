@@ -156,7 +156,7 @@ export async function postItemToEbay(form: FormData) {
     if (saved.error) throw new Error(`Published on eBay (${url}) but could not save the listing here: ${saved.error.message}`);
     await ctx.supabase.from("inventory_items").update({ status: "listed" }).eq("id", itemId).in("status", ["draft", "researching"]);
     await log(ctx, "ebay_listing_published", "listing", saved.data!.id, { listingId, offerId, price, floor, environment: conn.environment, categoryId, photos: imageUrls.length });
-    return `Live on eBay at $${price.toFixed(2)}${floor !== null ? ` (offers under $${floor.toFixed(2)} auto-declined)` : ""}.`;
+    return `Boom, it's fucking live on eBay at $${price.toFixed(2)}${floor !== null ? ` (offers under $${floor.toFixed(2)} auto-declined)` : ""}.`;
   });
 }
 

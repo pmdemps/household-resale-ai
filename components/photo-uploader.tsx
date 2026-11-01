@@ -101,7 +101,7 @@ export function PhotoUploader({ householdId, itemId, photoCount, compact = false
           {errors.map((e, i) => <li key={i}>{e}</li>)}
         </ul>
       )}
-      {!busy && errors.length === 0 && added > 0 ? <p className="text-xs text-good">Added {added} photo{added === 1 ? "" : "s"}.</p> : null}
+      {!busy && errors.length === 0 && added > 0 ? <p className="text-xs text-good">Added {added} photo{added === 1 ? "" : "s"}. Looking fucking good.</p> : null}
     </div>
   );
 }

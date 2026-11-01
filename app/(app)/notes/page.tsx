@@ -20,7 +20,7 @@ export default async function NotesPage({ searchParams }: { searchParams: Promis
       <header>
         <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Notes</h1>
         <p className="mt-1 text-sm text-slate-400">
-          Just for your household: reminders, &quot;don&apos;t sell this,&quot; who&apos;s shipping what. Buyers and marketplaces never see these.
+          Just us. Reminders, &quot;don&apos;t you fucking dare sell this,&quot; who&apos;s shipping what. Buyers and marketplaces never see any of it.
         </p>
       </header>
       <section className="surface p-4">

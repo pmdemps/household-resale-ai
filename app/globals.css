@@ -140,3 +140,51 @@ button, input, select, textarea { font: inherit; }
 @media (prefers-color-scheme: light) {
   :root:not([data-theme]) .sunflower-corner { display: block; }
 }
+
+/* Raining cash behind the page: dark theme only, behind everything, kept faint so text stays readable. */
+.cash-rain { display: block; }
+:root[data-theme="light"] .cash-rain { display: none; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .cash-rain { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cash-rain { display: none !important; }
+}
+.cash-note {
+  position: absolute;
+  top: -12vh;
+  opacity: 0.22;
+  will-change: transform;
+  animation-name: cash-fall, cash-sway;
+  animation-timing-function: linear, ease-in-out;
+  animation-iteration-count: infinite, infinite;
+  animation-direction: normal, alternate;
+}
+@keyframes cash-fall {
+  from { top: -12vh; }
+  to { top: 112vh; }
+}
+@keyframes cash-sway {
+  from { transform: translateX(-24px) rotate(calc(var(--spin) * -28deg)) rotateY(0deg); }
+  to { transform: translateX(24px) rotate(calc(var(--spin) * 28deg)) rotateY(55deg); }
+}
+/* Raining sunflowers: the light theme's twin of the cash rain (same fall and sway keyframes). */
+.sunflower-rain { display: none; }
+:root[data-theme="light"] .sunflower-rain { display: block; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .sunflower-rain { display: block; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sunflower-rain { display: none !important; }
+}
+.sunflower-drop {
+  position: absolute;
+  top: -12vh;
+  opacity: 0.42;
+  will-change: transform;
+  animation-name: cash-fall, cash-sway;
+  animation-timing-function: linear, ease-in-out;
+  animation-iteration-count: infinite, infinite;
+  animation-direction: normal, alternate;
+}
+

@@ -23,7 +23,7 @@ export function NoteComposer({ itemId, placeholder }: { itemId?: string; placeho
         maxLength={4000}
         rows={2}
         className="field min-h-[2.75rem] flex-1 resize-y"
-        placeholder={placeholder ?? "Write a note for the household…"}
+        placeholder={placeholder ?? "Talk your shit…"}
         aria-label="Note"
       />
       <button className="btn-primary h-11 shrink-0" aria-label="Post note"><Send size={16} /></button>
@@ -46,7 +46,7 @@ export function NotesList({
   showItem?: boolean;
   allowPin?: boolean;
 }) {
-  if (notes.length === 0) return <p className="text-sm text-slate-500">Nothing yet.</p>;
+  if (notes.length === 0) return <p className="text-sm text-slate-500">Crickets.</p>;
   return (
     <ul className="space-y-3">
       {notes.map(n => {

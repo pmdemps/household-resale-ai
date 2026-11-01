@@ -6,9 +6,12 @@ import { cookies } from "next/headers";
 import { ThemePicker } from "@/components/theme-toggle";
 import { THEME_COOKIE, parseTheme } from "@/lib/theme";
 import { MarketplaceConnections } from "@/components/marketplace-connections";
+import { AssistantAccess } from "@/components/assistant-keys";
+import { PushNotifications } from "@/components/push-notifications";
+import { loadMemberNames } from "@/lib/queries";
 
 const EXPORTS = [
-  { type: "items", label: "Inventory" },
+  { type: "items", label: "All our shit" },
   { type: "listings", label: "Listings" },
   { type: "offers", label: "Offers" },
   { type: "sales", label: "Sales & profit" },
@@ -18,21 +21,26 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const ctx = await requireHousehold();
   const { member, name } = await searchParams;
   const theme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
-  const { data: members } = await ctx.supabase.from("household_members").select("user_id, role, display_name").eq("household_id", ctx.household.id);
+  const [{ data: members }, names] = await Promise.all([
+    ctx.supabase.from("household_members").select("user_id, role, display_name").eq("household_id", ctx.household.id),
+    loadMemberNames(ctx),
+  ]);
 
   return (
     <div className="max-w-3xl space-y-6">
       <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Settings</h1>
 
       <section className="surface p-5">
-        <h2 className="text-base font-semibold text-white">Look</h2>
-        <p className="mt-1 text-sm text-slate-400">Saved on this device only, so each of you can pick your own.</p>
+        <h2 className="text-base font-semibold text-white">Vibe</h2>
+        <p className="mt-1 text-sm text-slate-400">Saved on this device only, so you each get your own.</p>
         <div className="mt-3"><ThemePicker initial={theme} /></div>
       </section>
 
+      <PushNotifications ctx={ctx} names={names} />
+
       <section className="surface p-5">
         <h2 className="text-base font-semibold text-white">Your name</h2>
-        <p className="mt-1 text-sm text-slate-400">Shown on your notes and activity.</p>
+        <p className="mt-1 text-sm text-slate-400">So we know who said what shit.</p>
         <form action={setDisplayName} className="mt-3 flex flex-wrap gap-2">
           <input name="display_name" maxLength={40} className="field min-w-[12rem] flex-1" placeholder="First name"
             defaultValue={(members ?? []).find(m => m.user_id === ctx.userId)?.display_name ?? ""} />
@@ -58,12 +66,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </form>
         )}
         {member === "added" && <p className="mt-2 text-sm text-good">Added. They&apos;ll see this household next time they sign in.</p>}
-        {member === "not_found" && <p className="mt-2 text-sm text-warn">No account with that email yet. Ask them to sign up at /login first, then add them.</p>}
+        {member === "not_found" && <p className="mt-2 text-sm text-warn">No account with that email yet. Have them sign the fuck up first, then add them.</p>}
       </section>
 
       <section className="surface p-5">
         <h2 className="text-base font-semibold text-white">Export</h2>
-        <p className="mt-1 text-sm text-slate-400">CSV files open in Excel, Numbers, or Google Sheets.</p>
+        <p className="mt-1 text-sm text-slate-400">For when we want to nerd out in a spreadsheet. Opens in Excel, Numbers, or Google Sheets.</p>
         <div className="mt-3 flex flex-wrap gap-2">
           {EXPORTS.map(e => (
             <a key={e.type} href={`/api/export?type=${e.type}`} className="btn-secondary"><Download size={15} /> {e.label}</a>
@@ -72,10 +80,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       </section>
 
       <form action={signOut} className="lg:hidden">
-        <button className="btn-secondary w-full"><LogOut size={15} /> Sign out</button>
+        <button className="btn-secondary w-full"><LogOut size={15} /> Peace the fuck out</button>
       </form>
 
       <MarketplaceConnections ctx={ctx} />
+
+      <AssistantAccess ctx={ctx} names={names} />
 
       <section className="surface p-5">
         <h2 className="text-base font-semibold text-white">Marketplaces</h2>

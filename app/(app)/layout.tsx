@@ -6,6 +6,9 @@ import { isSupabaseConfigured, requireHousehold } from "@/lib/household";
 import { cookies } from "next/headers";
 import { ThemeQuickToggle } from "@/components/theme-toggle";
 import { SunflowerCorner } from "@/components/sunflower";
+import { CashRain } from "@/components/cash-rain";
+import { SunflowerRain } from "@/components/sunflower-rain";
+import { AppBadge } from "@/components/app-badge";
 import { THEME_COOKIE, parseTheme } from "@/lib/theme";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +28,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="mx-auto flex min-h-screen max-w-[1500px]">
       <SunflowerCorner />
+      <CashRain />
+      <SunflowerRain />
+      <AppBadge count={pending} />
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-line px-4 py-6 lg:flex">
         <Link href="/" className="flex items-center gap-3 px-2">
           <Logo size={40} />
@@ -35,12 +41,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </Link>
         <SideNav pendingCount={pending} />
         <div className="mt-auto flex items-center justify-between px-1">
-          <span className="text-xs text-slate-500">Look</span>
+          <span className="text-xs text-slate-500">Vibe</span>
           <ThemeQuickToggle initial={theme} />
         </div>
         <form action={signOut} className="mt-2">
           <button className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-slate-500 hover:bg-white/[0.04] hover:text-white">
-            <LogOut size={16} /> Sign out
+            <LogOut size={16} /> Peace the fuck out
           </button>
         </form>
       </aside>

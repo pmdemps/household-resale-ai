@@ -8,11 +8,11 @@ import { ItemThumb } from "@/components/item-photos";
 import { ProfitBadge } from "@/components/money";
 
 const FILTERS = [
-  { id: "open", label: "To sell" },
-  { id: "unlisted", label: "Not listed yet" },
+  { id: "open", label: "Still here" },
+  { id: "unlisted", label: "Collecting dust" },
   { id: "listed", label: "For sale" },
   { id: "sold", label: "Sold" },
-  { id: "all", label: "All" },
+  { id: "all", label: "All of it" },
 ] as const;
 
 const STATUS_STYLE: Record<string, string> = {
@@ -57,10 +57,10 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
   return (
     <div className="space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Stuff</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">My Shit</h1>
         <div className="flex gap-2">
           <a href={`/api/export?type=items`} className="btn-secondary" aria-label="Download as CSV"><Download size={16} /> <span className="hidden sm:inline">CSV</span></a>
-          <Link href="/inventory/new" className="btn-primary"><Plus size={17} /> Add item</Link>
+          <Link href="/inventory/new" className="btn-primary"><Plus size={17} /> Add shit</Link>
         </div>
       </header>
 
@@ -68,7 +68,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
         <input type="hidden" name="status" value={status} />
         <div className="relative flex-1">
           <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-          <input name="q" defaultValue={q} className="field pl-9" placeholder="Search name, brand, location…" />
+          <input name="q" defaultValue={q} className="field pl-9" placeholder="Search our shit…" />
         </div>
         <button className="btn-secondary">Search</button>
       </form>
@@ -87,7 +87,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
 
       {items.length === 0 ? (
         <div className="surface p-8 text-center text-sm text-slate-400">
-          Nothing here yet. <Link href="/inventory/new" className="text-link hover:underline">Add an item</Link>
+          Nothing here. Either we sold all of it or we&apos;re fucking slacking. <Link href="/inventory/new" className="text-link hover:underline">Add some shit</Link>
         </div>
       ) : (
         <ul className="surface divide-y divide-line">
@@ -122,7 +122,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
           })}
         </ul>
       )}
-      <p className="text-xs text-slate-500">{items.length} thing{items.length === 1 ? "" : "s"}</p>
+      <p className="text-xs text-slate-500">{items.length} piece{items.length === 1 ? "" : "s"} of shit</p>
     </div>
   );
 }

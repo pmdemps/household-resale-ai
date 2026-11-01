@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ExternalLink, MapPin, Plus } from "lucide-react";
-import { addListing, recordOffer, recordSale, updateItem, updateListing } from "@/app/actions";
+import { addListing, recordOffer, recordSale, setItemOwner, updateItem, updateListing } from "@/app/actions";
 import { FeeBreakdown } from "@/components/fee-breakdown";
 import { FeeCalculator } from "@/components/fee-calculator";
 import { ItemForm } from "@/components/item-form";
@@ -16,7 +16,7 @@ import { loadPhotos } from "@/lib/photos";
 import { PostToEbay } from "@/components/post-to-ebay";
 import { isUsableConnection, loadEbayConnection } from "@/lib/ebay/connection";
 import { PLATFORMS, platformById, platformName } from "@/lib/platforms";
-import { loadMemberNames, loadNotes, loadPendingOffers } from "@/lib/queries";
+import { loadMemberNames, loadMembers, loadNotes, loadPendingOffers } from "@/lib/queries";
 import { NoteComposer, NotesList } from "@/components/notes";
 import { itemStatusLabel, listingStatusLabel, money, num, offerStatusLabel, type InventoryItem, type ItemComp, type Listing, type Offer, type Sale } from "@/lib/types";
 
@@ -25,7 +25,7 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
   const ctx = await requireHousehold();
   const hid = ctx.household.id;
 
-  const [itemRes, listingsRes, offersRes, saleRes, pending, comments, names, photos, compsRes, ebayCompsOn] = await Promise.all([
+  const [itemRes, listingsRes, offersRes, saleRes, pending, comments, names, photos, members, compsRes, ebayCompsOn] = await Promise.all([
     ctx.supabase.from("inventory_items").select("*").eq("household_id", hid).eq("id", id).maybeSingle(),
     ctx.supabase.from("listings").select("*").eq("household_id", hid).eq("item_id", id).order("created_at"),
     ctx.supabase.from("offers").select("*, listings!inner(item_id, platform)").eq("household_id", hid).eq("listings.item_id", id).neq("status", "pending").order("received_at", { ascending: false }),
@@ -34,6 +34,7 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
     loadNotes(ctx, { itemId: id }),
     loadMemberNames(ctx),
     loadPhotos(ctx, id),
+    loadMembers(ctx),
     // Errors (e.g. the item_comps migration not applied yet) hide the card instead of breaking the page.
     ctx.supabase.from("item_comps").select("*").eq("household_id", hid).eq("item_id", id).order("price").limit(100),
     ebayCompsAvailable(),
@@ -48,11 +49,12 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
   const livePlatforms = new Set(live.map(l => l.platform));
   const cost = num(item.purchase_cost);
   const isSold = item.status === "sold";
+  const saleProfit = sale ? num(sale.sale_price) + num(sale.shipping_charged) - num(sale.platform_fees) - num(sale.shipping_cost) - num(sale.other_costs) - cost : 0;
 
   return (
     <div className="space-y-6">
       <header>
-        <Link href="/inventory" className="text-sm text-link hover:underline">← Stuff</Link>
+        <Link href="/inventory" className="text-sm text-link hover:underline">← My Shit</Link>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-2xl font-semibold tracking-tight text-white">{item.name}</h1>
@@ -65,26 +67,39 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
               {item.storage_location && <span className="inline-flex items-center gap-1">· <MapPin size={13} />{item.storage_location}</span>}
             </p>
           </div>
-          <div className="text-right text-sm">
+          <div className="text-sm sm:text-right">
             <p className="text-slate-400">Asking <span className="font-semibold text-white">{money(num(item.target_price))}</span></p>
-            {item.floor_price !== null && <p className="text-slate-500">Floor {money(num(item.floor_price))}</p>}
+            {item.floor_price !== null && <p className="text-slate-500">Rock bottom {money(num(item.floor_price))}</p>}
           </div>
         </div>
+        {members.length > 1 && (
+          <form action={setItemOwner} className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+            <input type="hidden" name="item_id" value={item.id} />
+            <label htmlFor="owner_user" className="text-slate-400">Whose shit is it?</label>
+            <select id="owner_user" name="owner_user" defaultValue={item.owner_user ?? ""} className="field w-auto">
+              <option value="">Ours</option>
+              {members.map(m => (
+                <option key={m.id} value={m.id}>{m.id === ctx.userId ? "Mine" : m.name ? `${m.name}${/s$/i.test(m.name) ? "'" : "'s"}` : "My other half's"}</option>
+              ))}
+            </select>
+            <button className="btn-secondary">Save</button>
+          </form>
+        )}
       </header>
 
       <ItemPhotos householdId={hid} itemId={item.id} itemName={item.name} photos={photos} justCreated={saved === "1"} />
 
       {sale && (
         <section className="surface p-5">
-          <h2 className="text-base font-semibold text-white">Sold on {platformName(sale.platform)}</h2>
+          <h2 className="text-base font-semibold text-white">Sold on {platformName(sale.platform)}{saleProfit < 0 ? ". At least it's fucking gone." : ", fuck yeah"}</h2>
           <p className="mt-1 text-xs text-slate-500">{new Date(sale.sold_at).toLocaleDateString()}</p>
           <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
             <Metric label="Sale price" value={money(num(sale.sale_price))} />
             <Metric label="Fees" value={money(num(sale.platform_fees))} />
-            <Metric label="Shipping you paid" value={money(num(sale.shipping_cost))} />
+            <Metric label="Shipping we paid" value={money(num(sale.shipping_cost))} />
             <div>
-              <dt className="text-xs text-slate-500">Profit after what you paid</dt>
-              <dd className="mt-1"><ProfitBadge size="md" value={num(sale.sale_price) + num(sale.shipping_charged) - num(sale.platform_fees) - num(sale.shipping_cost) - num(sale.other_costs) - cost} /></dd>
+              <dt className="text-xs text-slate-500">Profit after what we paid</dt>
+              <dd className="mt-1"><ProfitBadge size="md" value={saleProfit} /></dd>
             </div>
           </dl>
         </section>
@@ -92,8 +107,8 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
 
       {pending.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-white">Offers waiting on you</h2>
-          {pending.map(o => <OfferCard key={o.id} offer={o} />)}
+          <h2 className="text-lg font-semibold text-white">Somebody wants this shit</h2>
+          {pending.map(o => <OfferCard key={o.id} offer={o} members={members} currentUser={ctx.userId} />)}
         </section>
       )}
 
@@ -107,7 +122,7 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
 
           <section className="surface p-5">
             <h2 className="text-base font-semibold text-white">Listed on</h2>
-            {listings.length === 0 && <p className="mt-2 text-sm text-slate-500">Not listed anywhere yet.</p>}
+            {listings.length === 0 && <p className="mt-2 text-sm text-slate-500">Not listed anywhere yet. It&apos;s just sitting there like an asshole.</p>}
             <ul className="mt-3 space-y-3">
               {listings.map(l => (
                 <li key={l.id} className="rounded-xl border border-line p-4">
@@ -139,7 +154,7 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
                         <summary className="cursor-pointer text-xs text-link">Got an offer or a sale?</summary>
                         <div className="mt-3 grid gap-3 sm:grid-cols-2">
                           <form action={recordOffer} className="space-y-2 rounded-lg border border-line p-3">
-                            <p className="text-xs font-medium text-slate-300">Record an offer</p>
+                            <p className="text-xs font-medium text-slate-300">Somebody made an offer</p>
                             <input type="hidden" name="listing_id" value={l.id} />
                             <input type="hidden" name="item_id" value={item.id} />
                             <input name="amount" type="number" min="0" step="0.01" required className="field" placeholder="Offer $" inputMode="decimal" />
@@ -147,7 +162,7 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
                             <button className="btn-secondary w-full">Add offer</button>
                           </form>
                           <form action={recordSale} className="space-y-2 rounded-lg border border-line p-3">
-                            <p className="text-xs font-medium text-slate-300">Sold at a price</p>
+                            <p className="text-xs font-medium text-slate-300">We fucking sold it!</p>
                             <input type="hidden" name="listing_id" value={l.id} />
                             <input name="sale_price" type="number" min="0" step="0.01" required className="field" defaultValue={num(l.list_price).toFixed(2)} inputMode="decimal" aria-label="Sale price" />
                             <input name="shipping_cost" type="number" min="0" step="0.01" className="field" placeholder="Label you paid $ (optional)" inputMode="decimal" />
@@ -208,27 +223,27 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
 
           <section className="surface p-5">
             <h2 className="text-base font-semibold text-white">Comments</h2>
-            <p className="mt-0.5 text-xs text-slate-500">Only your household sees these.</p>
+            <p className="mt-0.5 text-xs text-slate-500">Just us. Buyers never see these, so talk all the shit you want.</p>
             <div className="mt-3 space-y-3">
               <NotesList notes={comments} names={names} currentUser={ctx.userId} isAdmin={ctx.role === "admin"} showItem={false} allowPin={false} />
-              <NoteComposer itemId={item.id} placeholder="Add a comment on this item…" />
+              <NoteComposer itemId={item.id} placeholder="Talk shit about this thing…" />
             </div>
           </section>
 
           <details className="surface p-5">
-            <summary className="cursor-pointer text-base font-semibold text-white">Edit details</summary>
+            <summary className="cursor-pointer text-base font-semibold text-white">Fix the details</summary>
             <div className="mt-4"><ItemForm action={updateItem} item={item} /></div>
           </details>
         </div>
 
         <aside className="space-y-4">
           <section className="surface p-5">
-            <h2 className="text-base font-semibold text-white">Where you&apos;d net the most</h2>
+            <h2 className="text-base font-semibold text-white">Where we&apos;d make the most fucking money</h2>
             <div className="mt-3"><FeeCalculator defaultPrice={num(item.target_price)} itemCost={cost} category={item.category} /></div>
           </section>
           {live.some(l => platformById(l.platform).postingRules.length > 0) && (
             <section className="surface p-5 text-xs leading-5 text-slate-400">
-              <p className="font-medium text-slate-200">Rules for this item&apos;s platforms</p>
+              <p className="font-medium text-slate-200">Rules so we don&apos;t get our asses banned</p>
               <ul className="mt-2 list-disc space-y-1 pl-4">
                 {live.flatMap(l => platformById(l.platform).postingRules.map(r => <li key={l.id + r}>{r}</li>))}
               </ul>

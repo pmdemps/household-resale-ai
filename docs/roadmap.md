@@ -33,13 +33,14 @@ Dashboard, items with location/size/condition/floor price, listings per platform
 ### Stage 2 — Offer watcher (email → app)
 - Scheduled agent reads Gmail for offer/sale emails from eBay, Vinted, Poshmark, Mercari, Depop.
 - Matches each to a listing, creates the `offers` row (`source = 'email'`) and an `offer_decision` task.
-- Push notification: "Kids' sneakers · $5.99 on Vinted · offer $3.99 · you'd get $3.99. Accept?"
+- ✅ Push notifications: every new pending to-do (offer, sale to confirm, buyer message, delist) buzzes each phone that turned it on in Settings → Phone buzzes, plus a count on the app icon. Works from the iPhone home-screen app (iOS 16.4+). Database trigger → `pg_net` → `/api/push/dispatch` → `web-push`; no env vars (`20261031010000_push_notifications.sql`, `docs/deploy.md` step 6).
+- Later: the profit math in the notification itself ("offer $3.99 · we'd get $3.99"), per-person quiet hours.
 - Needs: a server-side agent key (service role, never in the browser), real sample emails to build parsers against, dedupe by message ID.
 
-### Stage 3 — Agent API + approval loop
-- `/api/agent/*` endpoints with per-agent tokens (scoped to one household, revocable, logged as `actor_agent`).
-- Agents can read inventory, propose tasks, and report results; only humans can approve.
-- Any AI (Claude, ChatGPT, Gemini) plugs in through the same API or an MCP server wrapping it.
+### Stage 3 — Agent API + approval loop (first half ✅)
+- ✅ Whose shit is it: items can belong to one of us ("Whose shit is it?" on the item page). "That's Lauren's, go ask her" (offer card button, `hand_off` in the assistant API, or Claude) marks it as hers and buzzes only her phone: "Patrick says this is your shit. How badly do you wanna sell it?" New offers on her stuff still buzz both phones, worded for each ("your shit" / "Lauren's shit"). Either of us can still answer (`20261101000000_whose_shit.sql`).
+- ✅ `/api/assistant`: per-member assistant keys (made in Settings, revocable, SHA-256 stored, logged as `actor_agent`). The household's own assistant (Muse, ChatGPT) reads what needs a decision and relays the member's accept / counter / decline, records offers and sales the member confirmed, leaves notes and closes to-dos. Floor price enforced in SQL. See `docs/agents/assistant-concierge.md`.
+- Later: read-only / propose-only keys for autonomous agents (today a key always acts for a member), an MCP server wrapping the same calls.
 
 ### Stage 4 — eBay integration
 - eBay OAuth (user token stored encrypted server-side).

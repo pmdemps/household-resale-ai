@@ -3,10 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getContext, requireHousehold } from "@/lib/household";
+import type { DecisionResult } from "@/lib/assistant/protocol";
 import { isEbayConfigured } from "@/lib/ebay/config";
 import { respondToEbayOfferDecision } from "@/lib/ebay/respond";
 import { estimateFees } from "@/lib/fees";
-import { PLATFORMS, platformName } from "@/lib/platforms";
+import { PLATFORMS } from "@/lib/platforms";
 import { CATEGORIES, ITEM_STATUSES, LISTING_STATUSES, num } from "@/lib/types";
 
 const PLATFORM_IDS = PLATFORMS.map(p => p.id) as string[];
@@ -125,6 +126,34 @@ export async function updateItem(form: FormData) {
   redirect(`/inventory/${id}`);
 }
 
+/** "Whose shit is it?" on the item page: a member's id, or blank for ours. The database checks they're in the household. */
+export async function setItemOwner(form: FormData) {
+  const ctx = await requireHousehold();
+  const id = text(form, "item_id", 64);
+  const owner = optText(form, "owner_user", 64);
+  fail((await ctx.supabase.from("inventory_items").update({ owner_user: owner }).eq("id", id).eq("household_id", ctx.household.id)).error);
+  await log(ctx, "item_owner_set", "item", id, { owner_user: owner });
+  revalidatePath(`/inventory/${id}`);
+  revalidatePath("/offers");
+  revalidatePath("/");
+}
+
+/**
+ * "That's Lauren's, go ask her": marks the thing as theirs and buzzes only their phone with
+ * "<you> says this is your shit. How badly do you wanna sell it?". Anyone can still answer the offer.
+ */
+export async function handOffOffer(form: FormData) {
+  const ctx = await requireHousehold();
+  const offerId = text(form, "offer_id", 64);
+  const to = text(form, "to_user", 64);
+  const { data, error } = await ctx.supabase.rpc("handoff_item", { p_household_id: ctx.household.id, p_to: to, p_offer_id: offerId });
+  fail(error);
+  const itemId = (data as { item?: { id?: string } } | null)?.item?.id;
+  revalidatePath("/");
+  revalidatePath("/offers");
+  if (itemId) revalidatePath(`/inventory/${itemId}`);
+}
+
 export async function setItemStatus(form: FormData) {
   const ctx = await requireHousehold();
   const id = text(form, "id", 64);
@@ -226,99 +255,63 @@ export async function recordOffer(form: FormData) {
 }
 
 /**
- * Accept / decline / counter an offer. Accepting records the sale with estimated fees,
- * marks the item sold, and queues "delist" tasks for every other live listing so the
- * item can't be sold twice.
+ * Accept / decline / counter an offer. The work happens in the database function public.decide_offer
+ * (supabase/migrations/20261031000000_assistant_access.sql): offer status, the sale with the fees estimated
+ * here, item and listing marked sold, other pending offers declined, "delist" tasks for every other live
+ * listing so the item can't be sold twice, and the activity log entry. The same core serves the assistant
+ * API (app/api/assistant), so a decision tapped here and one relayed by Muse do exactly the same thing.
+ * A member looking at the lowball warning may still take an offer below the floor (override true).
  */
 export async function decideOffer(form: FormData) {
   const ctx = await requireHousehold();
   const offerId = text(form, "offer_id", 64);
   const decision = text(form, "decision", 20);
   if (!["accepted", "declined", "countered"].includes(decision)) throw new Error("Invalid decision");
+  const counter = decision === "countered" ? amount(form, "counter_amount") : null;
+  const shippingCost = optAmount(form, "shipping_cost") ?? 0;
 
-  const { data: offer, error: offerErr } = await ctx.supabase
-    .from("offers")
-    .select("*, listings!inner(id, item_id, platform, status, external_id)")
-    .eq("id", offerId)
-    .eq("household_id", ctx.household.id)
-    .single();
-  fail(offerErr);
-  if (!offer || offer.status !== "pending") throw new Error("This offer has already been decided.");
-  const listing = offer.listings as { id: string; item_id: string; platform: string };
-  const now = new Date().toISOString();
-
-  const patch: Record<string, unknown> = { status: decision, decided_at: now, decided_by: ctx.userId };
-  if (decision === "countered") patch.counter_amount = amount(form, "counter_amount");
-  fail((await ctx.supabase.from("offers").update(patch).eq("id", offerId)).error);
-
+  let fees = 0;
   if (decision === "accepted") {
-    const salePrice = num(offer.amount);
-    const shippingCost = optAmount(form, "shipping_cost") ?? 0;
-    const fees = estimateFees(listing.platform, salePrice, { sellerShippingCost: shippingCost });
-    fail(
-      (
-        await ctx.supabase.from("sales").insert({
-          household_id: ctx.household.id,
-          item_id: listing.item_id,
-          listing_id: listing.id,
-          platform: listing.platform,
-          sale_price: salePrice,
-          platform_fees: fees.totalFees,
-          shipping_cost: shippingCost,
-          sold_at: now,
-          created_by: ctx.userId,
-        })
-      ).error,
-    );
-    await ctx.supabase.from("listings").update({ status: "sold", ended_at: now }).eq("id", listing.id);
-    await ctx.supabase.from("inventory_items").update({ status: "sold", sold_price: salePrice, sold_at: now }).eq("id", listing.item_id);
-    // Decline other pending offers on this listing.
-    await ctx.supabase.from("offers").update({ status: "declined", decided_at: now, decided_by: ctx.userId })
-      .eq("listing_id", listing.id).eq("status", "pending");
-
-    const { data: others } = await ctx.supabase
-      .from("listings")
-      .select("id, platform")
-      .eq("item_id", listing.item_id)
-      .neq("id", listing.id)
-      .in("status", ["draft", "active", "paused"]);
-    if (others?.length) {
-      await ctx.supabase.from("agent_tasks").insert(
-        others.map(o => ({
-          household_id: ctx.household.id,
-          kind: "delist",
-          title: `Remove sold item from ${platformName(o.platform)}`,
-          listing_id: o.id,
-          item_id: listing.item_id,
-          requested_by: "system",
-          detail: "Item sold on another platform. End this listing now to avoid selling it twice.",
-        })),
-      );
-    }
+    const { data: offer, error } = await ctx.supabase
+      .from("offers")
+      .select("amount, listings!inner(platform)")
+      .eq("id", offerId)
+      .eq("household_id", ctx.household.id)
+      .single();
+    fail(error);
+    const platform = (offer?.listings as unknown as { platform?: string } | null)?.platform ?? "other";
+    fees = estimateFees(platform, num(offer?.amount), { sellerShippingCost: shippingCost }).totalFees;
   }
 
-  await ctx.supabase.from("agent_tasks").update({ status: "done", decided_by: ctx.userId, decided_at: now })
-    .eq("offer_id", offerId).eq("status", "pending");
-  await log(ctx, `offer_${decision}`, "offer", offerId, { amount: num(offer.amount), counter: patch.counter_amount ?? null });
+  const { data, error } = await ctx.supabase.rpc("decide_offer", {
+    p_offer_id: offerId,
+    p_decision: decision,
+    p_counter_amount: counter,
+    p_platform_fees: fees,
+    p_shipping_cost: shippingCost,
+    p_override_floor: true,
+  });
+  fail(error);
+  const result = data as DecisionResult;
 
   // eBay integration: if this is a Best Offer we pulled from eBay (offers.external_id = BestOfferID) and the
   // household has an active eBay connection, carry the human's decision to eBay (RespondToBestOffer).
   // The local decision above is already recorded; a failure here is logged to activity_log and noted on the
   // task (see lib/ebay/respond.ts) rather than thrown, so the page never errors because eBay was unreachable.
-  if (listing.platform === "ebay" && offer.external_id && isEbayConfigured()) {
+  if (result.listing.platform === "ebay" && result.offer_external_id && isEbayConfigured()) {
     await respondToEbayOfferDecision(ctx.supabase, {
       householdId: ctx.household.id,
       actorUser: ctx.userId,
       offerId,
-      bestOfferId: String(offer.external_id),
-      ebayItemId: (offer.listings as { external_id?: string | null }).external_id ?? null,
+      bestOfferId: String(result.offer_external_id),
+      ebayItemId: result.listing.external_id,
       decision,
-      counterAmount: (patch.counter_amount as number | undefined) ?? null,
+      counterAmount: result.counter_amount,
     });
   }
   revalidatePath("/");
   revalidatePath("/offers");
-  revalidatePath(`/inventory/${listing.item_id}`);
+  revalidatePath(`/inventory/${result.item.id}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -333,34 +326,15 @@ export async function recordSale(form: FormData) {
   const shippingCost = optAmount(form, "shipping_cost") ?? 0;
   const feesOverride = optAmount(form, "platform_fees");
   const fees = feesOverride ?? estimateFees(listing!.platform, salePrice, { sellerShippingCost: shippingCost }).totalFees;
-  const now = new Date().toISOString();
-  fail(
-    (
-      await ctx.supabase.from("sales").insert({
-        household_id: ctx.household.id,
-        item_id: listing!.item_id,
-        listing_id: listing!.id,
-        platform: listing!.platform,
-        sale_price: salePrice,
-        platform_fees: fees,
-        shipping_cost: shippingCost,
-        sold_at: now,
-        created_by: ctx.userId,
-      })
-    ).error,
-  );
-  await ctx.supabase.from("listings").update({ status: "sold", ended_at: now }).eq("id", listing!.id);
-  await ctx.supabase.from("inventory_items").update({ status: "sold", sold_price: salePrice, sold_at: now }).eq("id", listing!.item_id);
-  const { data: others } = await ctx.supabase.from("listings").select("id, platform")
-    .eq("item_id", listing!.item_id).neq("id", listing!.id).in("status", ["draft", "active", "paused"]);
-  if (others?.length) {
-    await ctx.supabase.from("agent_tasks").insert(others.map(o => ({
-      household_id: ctx.household.id, kind: "delist", title: `Remove sold item from ${platformName(o.platform)}`,
-      listing_id: o.id, item_id: listing!.item_id, requested_by: "system",
-      detail: "Item sold on another platform. End this listing now to avoid selling it twice.",
-    })));
-  }
-  await log(ctx, "sale_recorded", "sale", listing!.item_id, { platform: listing!.platform, salePrice });
+  // Shared core (public.record_sale → apply_sale): sale row, listing + item marked sold, pending offers
+  // declined, delist tasks for the item's other live listings, activity log. Same path as the assistant API.
+  const { error: saleErr } = await ctx.supabase.rpc("record_sale", {
+    p_listing_id: listingId,
+    p_sale_price: salePrice,
+    p_platform_fees: fees,
+    p_shipping_cost: shippingCost,
+  });
+  fail(saleErr);
   revalidatePath("/");
   revalidatePath(`/inventory/${listing!.item_id}`);
 }
