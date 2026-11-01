@@ -2,7 +2,7 @@ import { summarizeComps, verdictSentence } from "../comps.ts";
 import { estimateFees } from "../fees.ts";
 import { buildListingCopy, type ListingCopy } from "../listing-copy.ts";
 import { MANUAL_PLATFORMS, platformName } from "../platforms.ts";
-import { money, num } from "../types.ts";
+import { CATEGORIES, CONDITIONS, money, num } from "../types.ts";
 
 // Pure half of /api/assistant: the shapes the SQL functions return, request validation, and the plain
 // sentences ("say") an assistant can read out to the household. Nothing here touches the network, so it
@@ -293,6 +293,8 @@ export type AssistantAction =
   | { action: "propose_task"; kind: "price_change" | "listing_draft" | "relist" | "message_reply" | "other"; title: string; detail: string | null; item_id: string | null; listing_id: string | null }
   | { action: "hand_off"; to: string | null; offer_id: string | null; item_id: string | null }
   | { action: "set_platform"; item_id: string; platform: string; on: boolean }
+  | { action: "add_item"; name: string; category: string; brand: string | null; size: string | null; condition: string | null; asking: number; floor: number | null; cost: number; notes: string | null }
+  | { action: "add_photo"; item_id: string; image_url: string }
   | { action: "add_comp"; item_id: string; platform: string; title: string; price: number; shipping: number | null; url: string | null; kind: "active" | "sold"; condition: string | null; note: string | null };
 
 export class BadRequest extends Error {}
@@ -315,7 +317,7 @@ const amount = (v: unknown, field: string): number => {
 };
 const optAmount = (v: unknown, field: string): number | null => (v === null || v === undefined || v === "" ? null : amount(v, field));
 
-export const ASSISTANT_ACTIONS = ["decide", "record_offer", "record_sale", "note", "resolve_task", "propose_task", "hand_off", "set_platform", "add_comp"] as const;
+export const ASSISTANT_ACTIONS = ["decide", "record_offer", "record_sale", "note", "resolve_task", "propose_task", "hand_off", "set_platform", "add_comp", "add_item", "add_photo"] as const;
 
 /** Validates a POST body. Throws BadRequest with a sentence the assistant can act on. */
 export function parseAction(body: unknown): AssistantAction {
@@ -380,6 +382,28 @@ export function parseAction(body: unknown): AssistantAction {
       const on = normalizeOnOff(b.on ?? b.wanted ?? b.state);
       if (on === null) throw new BadRequest("on must be true (list it there) or false (take it down).");
       return { action, item_id: uuid(b.item_id, "item_id"), platform, on };
+    }
+    case "add_item": {
+      const name = str(b.name ?? b.title, 200);
+      if (!name) throw new BadRequest("An item needs a name, e.g. \"Carhartt work boots\".");
+      const asking = optAmount(b.asking ?? b.price ?? b.target_price, "asking") ?? 0;
+      const floor = optAmount(b.floor ?? b.floor_price, "floor");
+      if (floor !== null && asking > 0 && floor > asking) throw new BadRequest("floor can't be above the asking price.");
+      return {
+        action, name,
+        category: normalizeCategory(b.category),
+        brand: str(b.brand, 120), size: str(b.size, 60),
+        condition: normalizeCondition(b.condition),
+        asking, floor, cost: optAmount(b.cost ?? b.purchase_cost, "cost") ?? 0,
+        notes: joinNotes(str(b.notes ?? b.description, 4000), normalizeCondition(b.condition) === null ? str(b.condition, 200) : null),
+      };
+    }
+    case "add_photo": {
+      const url = str(b.image_url ?? b.url, 2000);
+      if (!url) throw new BadRequest("add_photo needs image_url (an https link to the photo), or send the file as multipart/form-data with a \"file\" field.");
+      const check = checkImageUrl(url);
+      if (!check.ok) throw new BadRequest(check.reason);
+      return { action, item_id: uuid(b.item_id, "item_id"), image_url: check.url };
     }
     case "add_comp": {
       const title = str(b.title, 300);
@@ -580,4 +604,66 @@ export function itemDetailSay(d: ItemDetail): string {
   const low = d.comps.lowest ? ` Lowest right now is ${money(d.comps.lowest.price)}${d.comps.lowest.platform ? ` on ${platformName(d.comps.lowest.platform)}` : ""}.` : "";
   const typical = d.comps.typical !== null ? ` Typical is ${money(d.comps.typical)} across ${d.comps.count} comps.` : "";
   return `${d.item.name}: ${where}${low}${typical}${d.comps.sentence ? " " + d.comps.sentence : ""}`;
+}
+
+// ---------------------------------------------------------------------------
+// Adding items and photos (migration 20261101060000_assistant_items_photos.sql)
+// ---------------------------------------------------------------------------
+/** Matches a category the app knows ("shoes" -> "Shoes", "toys" -> "Toys & games"); anything else is "Other". */
+export function normalizeCategory(v: unknown): string {
+  const w = String(v ?? "").trim().toLowerCase();
+  if (!w) return "Other";
+  const exact = CATEGORIES.find(c => c.toLowerCase() === w);
+  if (exact) return exact;
+  if (w.length < 3) return "Other";
+  const starts = CATEGORIES.find(c => c.toLowerCase().startsWith(w) || w.startsWith(c.toLowerCase().split(/[ &]/)[0]));
+  return starts ?? "Other";
+}
+
+/** Matches a condition the app knows ("nwt" -> "New with tags", "used" -> "Good"); anything else is null (it goes to notes). */
+export function normalizeCondition(v: unknown): string | null {
+  const w = String(v ?? "").trim();
+  if (!w) return null;
+  const l = w.toLowerCase();
+  const alias: Record<string, string> = { nwt: "New with tags", nwot: "New without tags", new: "New without tags", "like-new": "Like new", used: "Good", "for parts": "For parts" };
+  if (alias[l]) return alias[l];
+  return CONDITIONS.find(c => c.toLowerCase() === l) ?? null;
+}
+
+function joinNotes(notes: string | null, conditionWords: string | null): string | null {
+  if (!conditionWords) return notes;
+  const line = `Condition (as described): ${conditionWords}`;
+  return notes ? `${notes}\n${line}` : line;
+}
+
+/** Largest photo the server downloads or accepts (the item-photos bucket's own limit). */
+export const MAX_ASSISTANT_PHOTO_BYTES = 10 * 1024 * 1024;
+
+const PRIVATE_HOST = /^(localhost|.*\.local|.*\.internal|0\.0\.0\.0|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|169\.254\.\d+\.\d+|\[.*\])$/i;
+
+/** Only public https links are fetched: no http, no IP-literal or private hosts, no credentials in the URL. */
+export function checkImageUrl(raw: string): { ok: true; url: string } | { ok: false; reason: string } {
+  let u: URL;
+  try { u = new URL(raw.trim()); } catch { return { ok: false, reason: "image_url isn't a valid link." }; }
+  if (u.protocol !== "https:") return { ok: false, reason: "image_url must start with https://" };
+  if (u.username || u.password) return { ok: false, reason: "image_url can't contain a username or password." };
+  const host = u.hostname.replace(/\.+$/, "");
+  if (!host || !host.includes(".") || PRIVATE_HOST.test(host) || /^\d+\.\d+\.\d+\.\d+$/.test(host) || /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(host)) return { ok: false, reason: "image_url must be a public web address, not an IP or local address." };
+  return { ok: true, url: u.toString() };
+}
+
+export type AddItemResult = { item_id: string; name: string; duplicate: boolean };
+export type RecordPhotoResult = { photo_id: string; item_id: string; position: number; photo_count: number; storage_path: string };
+
+export function addItemSay(r: AddItemResult): string {
+  return r.duplicate
+    ? `${r.name} was already added a moment ago, so I used that one. Send photos to item ${r.item_id}.`
+    : `Added ${r.name} to Resale HQ as a draft. Send its photos next.`;
+}
+
+export function photoSay(r: RecordPhotoResult, itemName?: string | null): string {
+  const what = itemName ? ` for ${itemName}` : "";
+  return r.position === 0
+    ? `Saved the first photo${what}; it's the cover photo.`
+    : `Saved photo ${r.photo_count}${what}.`;
 }

@@ -311,3 +311,55 @@ test("a saved draft is not live, and the reply says so", () => {
   assert.equal(d.platforms.find(p => p.platform === "etsy")!.live, true);
   assert.match(itemDetailSay(d), /eBay \(draft, not posted yet\)/);
 });
+
+// --- Adding items and photos ---------------------------------------------------------------------
+import { checkImageUrl, normalizeCategory, normalizeCondition, addItemSay, photoSay } from "./protocol.ts";
+
+test("add_item reads everyday words", () => {
+  const a = parseAction({ action: "add_item", name: "Carhartt work boots", category: "shoes", brand: "Carhartt", size: "10", condition: "used", price: "$40", floor: 25, cost: 0 }) as Record<string, unknown>;
+  assert.equal(a.name, "Carhartt work boots");
+  assert.equal(a.category, "Shoes");
+  assert.equal(a.condition, "Good");
+  assert.equal(a.asking, 40);
+  assert.equal(a.floor, 25);
+  assert.equal(normalizeCategory("toys"), "Toys & games");
+  assert.equal(normalizeCategory("kitchen gadgets"), "Other");
+  assert.equal(normalizeCondition("NWT"), "New with tags");
+  assert.throws(() => parseAction({ action: "add_item" }), BadRequest);
+  assert.throws(() => parseAction({ action: "add_item", name: "x", asking: 10, floor: 20 }), BadRequest);
+});
+
+test("add_photo only fetches public https links", () => {
+  const a = parseAction({ action: "add_photo", item_id: ITEM, image_url: "https://files.muse.example/abc/photo.jpg?sig=1" }) as { image_url: string };
+  assert.match(a.image_url, /^https:\/\/files\.muse\.example\//);
+  for (const bad of ["http://example.com/a.jpg", "https://localhost/a.jpg", "https://127.0.0.1/a.jpg", "https://192.168.1.10/a.jpg",
+    "https://10.0.0.5/a.jpg", "https://169.254.169.254/latest/meta-data", "https://[::1]/a.jpg", "https://user:pw@example.com/a.jpg", "ftp://x/a.jpg", "not a url"]) {
+    assert.equal(checkImageUrl(bad).ok, false, bad);
+  }
+  assert.throws(() => parseAction({ action: "add_photo", item_id: ITEM }), BadRequest);
+  assert.throws(() => parseAction({ action: "add_photo", item_id: "nope", image_url: "https://example.com/a.jpg" }), BadRequest);
+});
+
+test("item and photo replies are plain and clean", () => {
+  assert.match(addItemSay({ item_id: ITEM, name: "Boots", duplicate: false }), /Added Boots/);
+  assert.match(addItemSay({ item_id: ITEM, name: "Boots", duplicate: true }), /already added/);
+  assert.match(photoSay({ photo_id: "p", item_id: ITEM, position: 0, photo_count: 1, storage_path: "x" }), /cover photo/);
+  assert.match(photoSay({ photo_id: "p", item_id: ITEM, position: 2, photo_count: 3, storage_path: "x" }), /photo 3/);
+});
+
+test("review fixes: link rules, category and condition handling", async () => {
+  for (const bad of ["https://localhost./a.jpg", "https://foo.internal./a.jpg", "https://100.64.0.1/a.jpg", "https://intranet/a.jpg"]) {
+    assert.equal(checkImageUrl(bad).ok, false, bad);
+  }
+  assert.equal(checkImageUrl("https://example.com./a.jpg").ok, true, "a trailing dot on a public host is still fine");
+  assert.equal(normalizeCategory("c"), "Other", "one letter is not enough to guess a category");
+  assert.equal(normalizeCondition("scuffed on the toe"), null);
+  const a = parseAction({ action: "add_item", name: "Boots", condition: "scuffed on the toe", notes: "size 10" }) as { condition: string | null; notes: string };
+  assert.equal(a.condition, null);
+  assert.match(a.notes, /size 10\nCondition \(as described\): scuffed on the toe/);
+  // The SQL whitelist in the migration must match the app's lists.
+  const { readFileSync } = await import("node:fs");
+  const { CATEGORIES, CONDITIONS } = await import("../types.ts");
+  const sql = readFileSync(new URL("../../supabase/migrations/20261101060000_assistant_items_photos.sql", import.meta.url), "utf8");
+  for (const c of [...CATEGORIES, ...CONDITIONS]) assert.ok(sql.includes(`'${c.replace(/'/g, "''")}'`), `SQL list has ${c}`);
+});

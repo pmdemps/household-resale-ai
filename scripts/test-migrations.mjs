@@ -668,6 +668,45 @@ check((await as(A, "select count(*)::int as n from public.item_platform_gaps whe
   await expectError(() => asAnon("select public.assistant_item($1, $2)", ["rhq_" + "x".repeat(43), itemS]), "a bad key gets nothing", /Invalid assistant key|not valid/);
 }
 
+// --- Assistant adds items and photos (20261101060000) ---------------------------------------------
+{
+  const made = (await asAnon("select public.assistant_add_item($1, 'Carhartt work boots', 'Shoes', 'Carhartt', '10', 'Good', 40, 25, 0, 'From Muse') as v", [token2])).rows[0].v;
+  check(made.item_id && made.duplicate === false, "assistant can add an item");
+  const row = (await db.query("select household_id, created_by, status, target_price, floor_price from public.inventory_items where id = $1", [made.item_id])).rows[0];
+  check(row.household_id === hA && row.created_by === A && row.status === "draft" && Number(row.target_price) === 40, "the item lands in the key's household as a draft, created by the member");
+  const again = (await asAnon("select public.assistant_add_item($1, 'carhartt WORK boots') as v", [token2])).rows[0].v;
+  check(again.duplicate === true && again.item_id === made.item_id, "the same name again within 10 minutes returns the same item");
+  await expectError(() => asAnon("select public.assistant_add_item($1, 'x', 'Other', null, null, null, 10, 20)", [token2]), "floor above asking is refused", /floor price is above/);
+  const odd = (await asAnon("select public.assistant_add_item($1, 'Odd thing', 'shit pile', null, null, 'meh') as v", [token2])).rows[0].v;
+  const oddRow = (await db.query("select category, condition from public.inventory_items where id = $1", [odd.item_id])).rows[0];
+  check(oddRow.category === "Other" && oddRow.condition === null, "unknown category and condition are not stored as-is");
+  // The other member's assistant, also labeled "muse", adding the same name gets its own item.
+  const tokenB = "rhq_" + "b".repeat(43);
+  await as(B, "insert into public.assistant_keys (household_id, user_id, label, key_hash, key_prefix) values ($1, $2, 'muse', $3, $4)",
+    [hA, B, createHash("sha256").update(tokenB, "utf8").digest("hex"), tokenB.slice(0, 12)]);
+  const theirs = (await asAnon("select public.assistant_add_item($1, 'Carhartt work boots') as v", [tokenB])).rows[0].v;
+  check(theirs.duplicate === false && theirs.item_id !== made.item_id, "the duplicate guard is per member, not per assistant label");
+
+  const slot = (await asAnon("select public.assistant_photo_slot($1, $2) as v", [token2, made.item_id])).rows[0].v;
+  check(slot.household_id === hA && slot.count === 0, "photo slot returns the key's household for the item");
+  const good = `${hA}/${made.item_id}/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.jpg`;
+  const p1 = (await asAnon("select public.assistant_record_photo($1, $2, $3, 2000, 1500, 400000) as v", [token2, made.item_id, good])).rows[0].v;
+  check(p1.position === 0 && p1.photo_count === 1, "first assistant photo becomes the cover");
+  check((await db.query("select actor_agent from public.activity_log where action = 'photo_added' order by id desc limit 1")).rows[0].actor_agent === "muse", "photos are attributed to the assistant");
+  await expectError(() => asAnon("select public.assistant_record_photo($1, $2, $3)", [token2, made.item_id, `${hB}/${made.item_id}/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeef.jpg`]),
+    "a path in another household's folder is refused", /doesn't belong/);
+  await expectError(() => asAnon("select public.assistant_record_photo($1, $2, $3)", [token2, made.item_id, `${hA}/${made.item_id}/../../x.jpg`]),
+    "a path with tricks is refused", /doesn't belong/);
+  for (let i = 1; i < 12; i++) {
+    await asAnon("select public.assistant_record_photo($1, $2, $3)", [token2, made.item_id, `${hA}/${made.item_id}/aaaaaaaa-bbbb-cccc-dddd-${String(i).padStart(12, "0")}.jpg`]);
+  }
+  await expectError(() => asAnon("select public.assistant_photo_slot($1, $2)", [token2, made.item_id]), "no slot past 12 photos", /12 photos/);
+  await expectError(() => asAnon("select public.assistant_record_photo($1, $2, $3)", [token2, made.item_id, `${hA}/${made.item_id}/aaaaaaaa-bbbb-cccc-dddd-ffffffffffff.jpg`]),
+    "no 13th photo row either", /12 photos/);
+  const itemB2 = (await as(B, `insert into public.inventory_items (household_id, created_by, name) values ($1, $2, 'B photo target') returning id`, [hB, B])).rows[0].id;
+  await expectError(() => asAnon("select public.assistant_photo_slot($1, $2)", [token2, itemB2]), "assistant cannot add photos to another household's item", /Item not found/);
+}
+
 // Every assistant_* function checks its key with assistant_resolve_key, which writes last_used_at. PostgREST runs
 // STABLE/IMMUTABLE functions read-only, so any non-VOLATILE one fails live with "cannot execute UPDATE in a
 // read-only transaction" (bug found in 20261101040000). Guard against it for all of them, present and future.

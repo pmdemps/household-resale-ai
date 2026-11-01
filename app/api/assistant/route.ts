@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { assistantKeyFromHeaders } from "@/lib/assistant/keys";
 import {
   BadRequest,
+  addItemSay,
+  photoSay,
   buildItemDetail,
   findItemsSay,
   itemDetailSay,
@@ -15,6 +17,7 @@ import {
   summarizeInbox,
   type AssistantAction,
   type DecisionResult,
+  type AddItemResult,
   type FoundItem,
   type ItemDetailRow,
   type SetPlatformResult,
@@ -24,6 +27,7 @@ import {
   type SaleResult,
 } from "@/lib/assistant/protocol";
 import { AssistantApiError, callAssistantFunction } from "@/lib/assistant/server";
+import { downloadImage, reservePhotoSlot, storeAssistantPhoto } from "@/lib/assistant/photos";
 import { isEbayConfigured } from "@/lib/ebay/config";
 import { respondToEbayOfferDecision } from "@/lib/ebay/respond";
 import { estimateFees } from "@/lib/fees";
@@ -43,7 +47,8 @@ export const maxDuration = 30;
 //   GET  /api/assistant?item_id=…  one item in full: platform switches, live listings, what others sell it for
 //                                  (lowest, typical, verdict, links) and paste-ready listing text per platform
 //   POST /api/assistant            { action: decide | record_offer | record_sale | note | resolve_task | propose_task | hand_off
-//                                    | set_platform | add_comp, ... }
+//                                    | set_platform | add_comp | add_item | add_photo, ... }
+//   POST /api/assistant (multipart)  action=add_photo, item_id, file: the photo itself (under ~4 MB, Vercel's cap)
 //
 // Credential: an assistant key from Settings, sent as `Authorization: Bearer <key>` (or `X-Assistant-Key`).
 // The key is checked inside the database functions, which also attribute every write to the member who owns
@@ -70,6 +75,8 @@ const HELP = {
     propose_task: { kind: "message_reply | price_change | listing_draft | relist | other", title: "string", detail: "optional", item_id: "optional", listing_id: "optional" },
     hand_off: { to: "a household member's name (blank = the only other member)", offer_id: "<from pending_offers>", item_id: "<from listings>, when there is no offer" },
     set_platform: { item_id: "<from find or listings>", platform: "ebay | mercari | poshmark | offerup | facebook | vinted | etsy | thredup | depop", on: "true to list it there, false to take it down" },
+    add_item: { name: "what it is, e.g. Carhartt work boots", category: "Clothing | Shoes | Toys & games | Kids & baby | Home & kitchen | Electronics | Tools | Books & media | Collectibles | Other", brand: "optional", size: "optional", condition: "New with tags | New without tags | Like new | Good | Fair | For parts", asking: "optional number", floor: "optional number, lowest we'd take", cost: "optional number, what we paid", notes: "optional" },
+    add_photo: { item_id: "<from add_item, find or listings>", image_url: "https link to the photo; it is downloaded right away, so a temporary link is fine. Or POST multipart/form-data with action=add_photo, item_id and a file field (under 4 MB). JPEG, PNG or WebP, up to 10 MB by link; longest side 2000 px is plenty." },
     add_comp: { item_id: "<from find or listings>", title: "the other listing's title", price: "number (item price, not including shipping)", shipping: "optional number, 0 = free", url: "https link to the listing", platform: "where it's listed", kind: "active | sold", condition: "optional" },
   },
 };
@@ -143,6 +150,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const key = assistantKeyFromHeaders(request.headers);
   if (!key) return unauthorized();
+  if ((request.headers.get("content-type") ?? "").toLowerCase().startsWith("multipart/form-data")) return uploadPhoto(key, request);
   let action: AssistantAction;
   try {
     action = parseAction(await request.json().catch(() => { throw new BadRequest("The body must be JSON."); }));
@@ -180,6 +188,19 @@ export async function POST(request: NextRequest) {
           p_key: key, p_item_id: action.item_id, p_platform: action.platform, p_wanted: action.on,
         });
         return json({ ok: true, say: setPlatformSay(r), result: r });
+      }
+      case "add_item": {
+        const r = await callAssistantFunction<AddItemResult>("assistant_add_item", {
+          p_key: key, p_name: action.name, p_category: action.category, p_brand: action.brand, p_size: action.size,
+          p_condition: action.condition, p_asking: action.asking, p_floor: action.floor, p_cost: action.cost, p_notes: action.notes,
+        });
+        return json({ ok: true, say: addItemSay(r), result: r });
+      }
+      case "add_photo": {
+        const slot = await reservePhotoSlot(key, action.item_id); // key check before anything is fetched
+        const bytes = await downloadImage(action.image_url);
+        const r = await storeAssistantPhoto(key, slot, bytes);
+        return json({ ok: true, say: photoSay(r), result: r });
       }
       case "add_comp": {
         const r = await callAssistantFunction<{ comp_id: string; item_id: string }>("assistant_add_comp", {
@@ -272,4 +293,25 @@ async function recordSale(key: string, a: Extract<AssistantAction, { action: "re
     p_key: key, p_listing_id: a.listing_id, p_sale_price: a.sale_price, p_platform_fees: fees, p_shipping_cost: a.shipping_cost,
   });
   return json({ ok: true, say: saleSay(r), result: r });
+}
+
+/** multipart/form-data upload: action=add_photo, item_id, file. Kept under Vercel's ~4.5 MB request cap by the sender. */
+async function uploadPhoto(key: string, request: NextRequest) {
+  try {
+    if (Number(request.headers.get("content-length") ?? "0") > 5 * 1024 * 1024) throw new BadRequest("That upload is too big. Keep each photo under 4 MB, or send a link instead.");
+    let form: FormData;
+    try { form = await request.formData(); } catch { throw new BadRequest("Couldn't read the upload. Send multipart/form-data with action, item_id and file."); }
+    const action = String(form.get("action") ?? "add_photo");
+    if (action !== "add_photo") throw new BadRequest("File uploads are only for action add_photo.");
+    const itemId = String(form.get("item_id") ?? "").trim().toLowerCase();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(itemId)) throw new BadRequest("item_id must be an id from add_item, find or listings (a UUID).");
+    const slot = await reservePhotoSlot(key, itemId); // key check before the file is read or decoded
+    const file = form.get("file") ?? form.get("photo") ?? form.get("image");
+    if (!file || typeof file === "string") throw new BadRequest("Attach the photo in a field called \"file\".");
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const r = await storeAssistantPhoto(key, slot, bytes);
+    return json({ ok: true, say: photoSay(r), result: r });
+  } catch (e) {
+    return failure(e);
+  }
 }
