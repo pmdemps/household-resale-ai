@@ -79,6 +79,14 @@ WHAT OTHERS SELL IT FOR (comps)
 LISTING TEXT
 - "Give me the Mercari listing for the helmet" → GET <ADDRESS>?item_id=<item_id> and send me "listing_text.mercari" (title, description, price) exactly as given, ready to paste. Photos are in "photos". Never post it yourself.
 
+ADDING NEW STUFF (photos and a description)
+- When I send photos of something to sell, plus whatever I say about it, add it: POST {"action":"add_item","name":"WHAT IT IS","category":"Shoes","brand":"BRAND","size":"SIZE","condition":"Good","asking":40,"floor":25,"notes":"ANYTHING ELSE I SAID"}. Use only what I told you or what is plainly visible (brand on a tag, size on a label). Leave out anything you would be guessing, especially prices.
+- Then send each photo to that item_id, in the order I sent them (the first is the cover): POST {"action":"add_photo","item_id":"ITEM_ID","image_url":"https://YOUR-TEMPORARY-LINK"}. Resale HQ downloads it right away and keeps its own copy, so your temporary link can expire. Shrink first if you can: longest side 2000 px, JPEG.
+- If a link won't work, upload the file instead: POST multipart/form-data to the same address with fields action=add_photo, item_id=ITEM_ID and file=THE PHOTO (under 4 MB).
+- If it is something already in Resale HQ, GET ?find=WORD first and add the photos to that item instead of making a new one.
+- Up to 12 photos per item. JPEG, PNG or WebP only; convert iPhone HEIC photos to JPEG first.
+- Relay the "say". If you get "photos_not_configured", tell me photo uploads aren't switched on yet.
+
 HARD RULES
 - Never operate marketplace websites or apps for me. Do not log in to, click, accept, counter, decline, list or message on Vinted, Poshmark, Mercari, Depop, Facebook, Etsy or eBay. Vinted and others ban accounts for automation. Resale HQ talks to eBay through its official API when that is set up; everything else a human taps.
 - Never decide an offer, a price or a sale on your own, and never go below a floor price without my explicit words.
@@ -139,6 +147,8 @@ Each pending offer's `item` also carries `owner` (`{ id, name, is_you }`, or nul
 | `resolve_task` | `task_id`, `status` (`done` / `approved` / `rejected` / `cancelled`) | Closes a to-do. Offer to-dos are closed by `decide`, not here. |
 | `propose_task` | `kind` (`message_reply` / `price_change` / `listing_draft` / `relist` / `other`), `title`, optional `detail`, `item_id`, `listing_id` | Puts something on the household's to-do list. Same title within three days is not repeated. |
 | `set_platform` | `item_id`, `platform` (`ebay` / `mercari` / `poshmark` / `offerup` / `facebook` / `vinted` / `etsy` / `thredup` / `depop`; "posh", "Facebook Marketplace", "Offer Up" work too), `on` (`true` / `false`) | Flips the item's switch for the member. Writes a "Post *item* on X" or "Pull *item* off X" to-do (never twice), cancels the opposite one, or drops a draft that never went up. `result.outcome`: `todo_post`, `todo_pull`, `already_live`, `already_off`, `dropped_draft`. Never posts or ends anything itself. |
+| `add_item` | `name`, optional `category`, `brand`, `size`, `condition`, `asking`, `floor`, `cost`, `notes` | Adds a draft item for the member. The same name from the same assistant within 10 minutes returns the existing item (`duplicate: true`). |
+| `add_photo` | `item_id`, `image_url` (https; downloaded immediately, so a temporary link is fine), or multipart/form-data with `action=add_photo`, `item_id`, `file` (under 4 MB) | Stores Resale HQ's own copy in the item's photos (JPEG/PNG/WebP, up to 10 MB by link, 12 per item; the first becomes the cover). Needs `SUPABASE_SERVICE_ROLE_KEY` on the server, otherwise `503 photos_not_configured`. |
 | `add_comp` | `item_id`, `title`, `price`, optional `shipping` (0 = free), `url` (https only), `platform`, `kind` (`active` / `sold`), `condition`, `note` | Records a comparable listing the assistant found. The same link on the same item updates instead of duplicating. Shows on the item page's "What others sell this for" card, attributed to the assistant. |
 | `hand_off` | `offer_id` or `item_id`, optional `to` (a member's name, any case, first name is enough; blank = the only other member) | "That's Lauren's, go ask her": marks the item as theirs and buzzes only their phone. Does not decide anything; either member can still answer. `result.devices` is 0 when they have no phone notifications on. |
 
