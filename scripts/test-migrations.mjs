@@ -585,5 +585,19 @@ await as(A, "select public.decide_offer($1, 'declined')", [handOffer]);
 await expectError(() => as(A, "select public.handoff_item($1, $2, $3)", [hA, B, handOffer]), "an answered offer cannot be handed off", /already answered/);
 check((await as(B, "select public.handoff_item($1, $2, null, $3) as v", [hA, A, handItem])).rows[0].v.to.name === "Alex", "it works the other way round too");
 
+// --- Platform toggles (20261101030000): wants are household-scoped; gaps view shows wanted-but-not-live and live-but-not-wanted.
+const itemW = (await as(A, `insert into public.inventory_items (household_id, created_by, name, floor_price) values ($1, $2, 'Running shoes', 15) returning id`, [hA, A])).rows[0].id;
+await as(A, `insert into public.item_platform_wants (household_id, item_id, platform, wanted, set_by) values ($1, $2, 'mercari', true, $3), ($1, $2, 'poshmark', false, $3)`, [hA, itemW, A]);
+await as(A, `insert into public.listings (household_id, item_id, platform, status, list_price, created_by) values ($1, $2, 'poshmark', 'active', 30, $3)`, [hA, itemW, A]);
+await expectError(() => as(C, `insert into public.item_platform_wants (household_id, item_id, platform, wanted, set_by) values ($1, $2, 'ebay', true, $3)`, [hA, itemW, C]),
+  "non-member cannot set platform wants for another household", /row-level security/);
+check((await as(C, "select count(*)::int as n from public.item_platform_wants where item_id = $1", [itemW])).rows[0].n === 0, "non-member cannot read platform wants");
+const gaps = (await as(A, "select platform, gap from public.item_platform_gaps where item_id = $1 order by platform", [itemW])).rows;
+check(gaps.length === 2 && gaps[0].platform === "mercari" && gaps[0].gap === "needs_listing" && gaps[1].platform === "poshmark" && gaps[1].gap === "needs_delisting",
+  "gaps view lists wanted-but-not-live and live-but-not-wanted");
+check((await as(C, "select count(*)::int as n from public.item_platform_gaps where item_id = $1", [itemW])).rows[0].n === 0, "gaps view respects RLS (security_invoker)");
+await as(A, `insert into public.listings (household_id, item_id, platform, status, list_price, created_by) values ($1, $2, 'mercari', 'active', 32, $3)`, [hA, itemW, A]);
+check((await as(A, "select count(*)::int as n from public.item_platform_gaps where item_id = $1 and platform = 'mercari'", [itemW])).rows[0].n === 0, "a live listing closes the needs_listing gap");
+
 console.log(failures ? `${failures} FAILED` : "ALL PASSED");
 process.exit(failures ? 1 : 0);

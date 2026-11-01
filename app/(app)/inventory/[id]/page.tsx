@@ -12,6 +12,7 @@ import { estimateFees } from "@/lib/fees";
 import { requireHousehold } from "@/lib/household";
 import { loadPhotos } from "@/lib/photos";
 import { PostToEbay } from "@/components/post-to-ebay";
+import { PlatformToggles } from "@/components/platform-toggles";
 import { isUsableConnection, loadEbayConnection } from "@/lib/ebay/connection";
 import { PLATFORMS, platformById, platformName } from "@/lib/platforms";
 import { loadMemberNames, loadMembers, loadNotes, loadPendingOffers } from "@/lib/queries";
@@ -23,7 +24,7 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
   const ctx = await requireHousehold();
   const hid = ctx.household.id;
 
-  const [itemRes, listingsRes, offersRes, saleRes, pending, comments, names, photos, members] = await Promise.all([
+  const [itemRes, listingsRes, offersRes, saleRes, pending, comments, names, photos, members, wantsRes, tasksRes] = await Promise.all([
     ctx.supabase.from("inventory_items").select("*").eq("household_id", hid).eq("id", id).maybeSingle(),
     ctx.supabase.from("listings").select("*").eq("household_id", hid).eq("item_id", id).order("created_at"),
     ctx.supabase.from("offers").select("*, listings!inner(item_id, platform)").eq("household_id", hid).eq("listings.item_id", id).neq("status", "pending").order("received_at", { ascending: false }),
@@ -33,6 +34,9 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
     loadMemberNames(ctx),
     loadPhotos(ctx, id),
     loadMembers(ctx),
+    // Errors (e.g. the item_platform_wants migration not applied yet) hide the toggles instead of breaking the page.
+    ctx.supabase.from("item_platform_wants").select("platform, wanted").eq("household_id", hid).eq("item_id", id),
+    ctx.supabase.from("agent_tasks").select("kind, payload").eq("household_id", hid).eq("item_id", id).eq("status", "pending").in("kind", ["listing_draft", "delist"]),
   ]);
   const ebayConn = await loadEbayConnection(ctx.supabase, hid).catch(() => null);
   if (!itemRes.data) notFound();
@@ -109,6 +113,17 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
 
       <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
         <div className="space-y-6">
+          {!isSold && !wantsRes.error && (
+            <PlatformToggles
+              itemId={item.id}
+              category={item.category}
+              listings={listings}
+              wants={(wantsRes.data ?? []) as { platform: string; wanted: boolean }[]}
+              pendingTasks={(tasksRes.data ?? []) as { kind: string; payload: Record<string, unknown> }[]}
+              ebayConnected={isUsableConnection(ebayConn)}
+            />
+          )}
+
           <PostToEbay item={item} listings={listings} hasEbayConnection={isUsableConnection(ebayConn)} photoCount={photos.length} />
 
           <section className="surface p-5">

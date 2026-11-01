@@ -8,6 +8,7 @@ import { isEbayConfigured } from "@/lib/ebay/config";
 import { respondToEbayOfferDecision } from "@/lib/ebay/respond";
 import { estimateFees } from "@/lib/fees";
 import { PLATFORMS } from "@/lib/platforms";
+import { noteListingRecorded } from "@/lib/platform-wants";
 import { CATEGORIES, ITEM_STATUSES, LISTING_STATUSES, num } from "@/lib/types";
 
 const PLATFORM_IDS = PLATFORMS.map(p => p.id) as string[];
@@ -193,8 +194,10 @@ export async function addListing(form: FormData) {
   if (status === "active") {
     await ctx.supabase.from("inventory_items").update({ status: "listed" }).eq("id", itemId).in("status", ["draft", "researching"]);
   }
+  await noteListingRecorded(ctx, itemId, platform).catch(() => {}); // wants table may not be migrated yet
   await log(ctx, "listing_added", "listing", data!.id, { platform, status });
   revalidatePath(`/inventory/${itemId}`);
+  revalidatePath("/");
 }
 
 export async function updateListing(form: FormData) {

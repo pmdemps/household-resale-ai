@@ -51,7 +51,7 @@ test("other to-dos open Home and carry their detail on a second line", () => {
   const [m] = composeNotifications([item(task({ id: "t3", kind: "message_reply", title: "Buyer message on Vinted: still available?" }))], 1);
   assert.equal(m.payload.title, "A buyer's hitting us up");
   const [d] = composeNotifications([item(task({ id: "t4", kind: "delist", title: "Pull it off eBay, it already fucking sold" }))], 1);
-  assert.equal(d.payload.title, "Sold! Pull the other listings");
+  assert.equal(d.payload.title, "Pull a listing down");
   const [u] = composeNotifications([item(task({ id: "t5", kind: "something_new" }))], 1);
   assert.equal(u.payload.title, "Something needs us");
 });
