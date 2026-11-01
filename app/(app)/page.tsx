@@ -4,7 +4,7 @@ import { resolveTask } from "@/app/actions";
 import { OfferCard } from "@/components/offer-card";
 import { requireHousehold } from "@/lib/household";
 import { platformName } from "@/lib/platforms";
-import { loadMemberNames, loadNotes, loadOverview, loadPendingOffers } from "@/lib/queries";
+import { loadMemberNames, loadMembers, loadNotes, loadOverview, loadPendingOffers } from "@/lib/queries";
 import { NoteComposer, NotesList } from "@/components/notes";
 import { money, timeAgo } from "@/lib/types";
 import { ProfitBadge, toneOf } from "@/components/money";
@@ -12,7 +12,7 @@ import { profitSentence, signedMoney, type MonthPoint } from "@/lib/money";
 
 export default async function HomePage() {
   const ctx = await requireHousehold();
-  const [overview, offers, notes, names] = await Promise.all([loadOverview(ctx), loadPendingOffers(ctx), loadNotes(ctx, { limit: 3 }), loadMemberNames(ctx)]);
+  const [overview, offers, notes, names, members] = await Promise.all([loadOverview(ctx), loadPendingOffers(ctx), loadNotes(ctx, { limit: 3 }), loadMemberNames(ctx), loadMembers(ctx)]);
   const empty = overview.counts.unsold === 0 && overview.counts.sold === 0;
   const needsCount = offers.length + overview.tasks.length + overview.counts.needsListing;
 
@@ -61,7 +61,7 @@ export default async function HomePage() {
         <div className="mt-3 space-y-3">
           {offers.length > 0 && (
             <div>
-              <OfferCard offer={offers[0]} />
+              <OfferCard offer={offers[0]} members={members} currentUser={ctx.userId} />
               {offers.length > 1 && (
                 <Link href="/offers" className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-link hover:underline">
                   <HandCoins size={15} /> {offers.length - 1} more offer{offers.length - 1 === 1 ? "" : "s"} to deal with <ArrowRight size={14} />

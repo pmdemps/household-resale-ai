@@ -49,7 +49,9 @@ export async function dispatchPush(db: SupabaseClient, householdId: string, toke
   const delivered = new Set<string>();
 
   for (const n of plan) {
-    const targets = claim.subscriptions.filter(s => n.targetUser === null || s.user_id === n.targetUser);
+    const targets = claim.subscriptions.filter(
+      s => (n.targetUser === null || s.user_id === n.targetUser) && (!n.exceptUser || s.user_id !== n.exceptUser),
+    );
     const results = await Promise.allSettled(
       targets.map(s =>
         webpush.sendNotification(

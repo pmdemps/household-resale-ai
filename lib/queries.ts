@@ -12,21 +12,38 @@ type RawOffer = {
   id: string; amount: number; buyer_handle: string | null; received_at: string; note: string | null; external_id: string | null;
   listings: {
     id: string; platform: string; list_price: number; listing_url: string | null;
-    inventory_items: { id: string; name: string; purchase_cost: number; floor_price: number | null };
+    inventory_items: { id: string; name: string; purchase_cost: number; floor_price: number | null; owner_user: string | null };
   };
 };
 
 export async function loadPendingOffers(ctx: Ctx, itemId?: string): Promise<OfferWithContext[]> {
   let q = ctx.supabase
     .from("offers")
-    .select("id, amount, buyer_handle, received_at, note, external_id, listings!inner(id, platform, list_price, listing_url, item_id, inventory_items!inner(id, name, purchase_cost, floor_price))")
+    .select("id, amount, buyer_handle, received_at, note, external_id, listings!inner(id, platform, list_price, listing_url, item_id, inventory_items!inner(id, name, purchase_cost, floor_price, owner_user))")
     .eq("household_id", ctx.household.id)
     .eq("status", "pending")
     .order("received_at", { ascending: false });
   if (itemId) q = q.eq("listings.item_id", itemId);
   const { data, error } = await q;
   if (error) throw new Error(error.message);
-  return ((data ?? []) as unknown as RawOffer[]).map(o => ({
+  const rows = (data ?? []) as unknown as RawOffer[];
+
+  // Who was asked about each offer ("that's Lauren's, go ask her"): noted on the offer's pending to-do.
+  const asked = new Map<string, { user: string; at: string }>();
+  if (rows.length) {
+    const { data: tasks } = await ctx.supabase
+      .from("agent_tasks")
+      .select("offer_id, payload")
+      .eq("household_id", ctx.household.id)
+      .eq("kind", "offer_decision")
+      .eq("status", "pending")
+      .in("offer_id", rows.map(o => o.id));
+    for (const t of (tasks ?? []) as { offer_id: string | null; payload: { asked_user?: string; asked_at?: string } | null }[]) {
+      if (t.offer_id && t.payload?.asked_user) asked.set(t.offer_id, { user: t.payload.asked_user, at: t.payload.asked_at ?? "" });
+    }
+  }
+
+  return rows.map(o => ({
     id: o.id,
     amount: num(o.amount),
     buyer_handle: o.buyer_handle,
@@ -39,7 +56,9 @@ export async function loadPendingOffers(ctx: Ctx, itemId?: string): Promise<Offe
       name: o.listings.inventory_items.name,
       purchase_cost: num(o.listings.inventory_items.purchase_cost),
       floor_price: o.listings.inventory_items.floor_price === null ? null : num(o.listings.inventory_items.floor_price),
+      owner_user: o.listings.inventory_items.owner_user ?? null,
     },
+    asked: asked.get(o.id) ?? null,
   }));
 }
 
@@ -146,6 +165,18 @@ export async function loadMemberNames(ctx: Ctx): Promise<MemberNames> {
     names[m.user_id as string] = (m.display_name as string | null)?.trim() || (m.user_id === ctx.userId ? "You" : `Member ${i + 1}`);
   });
   return names;
+}
+
+export type Member = { id: string; name: string | null };
+
+/** Everyone in the household, oldest first; name is null for someone who hasn't set one in Settings. */
+export async function loadMembers(ctx: Ctx): Promise<Member[]> {
+  const { data } = await ctx.supabase
+    .from("household_members")
+    .select("user_id, display_name")
+    .eq("household_id", ctx.household.id)
+    .order("created_at");
+  return (data ?? []).map(m => ({ id: m.user_id as string, name: (m.display_name as string | null)?.trim() || null }));
 }
 
 export async function loadNotes(ctx: Ctx, opts: { itemId?: string; limit?: number } = {}) {

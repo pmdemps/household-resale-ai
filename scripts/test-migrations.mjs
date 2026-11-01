@@ -513,5 +513,77 @@ check(pushLog.filter(a => a === "push_enabled").length === 2 && pushLog.at(-1) =
 await as(A, "insert into public.agent_tasks (household_id, kind, title, requested_by) values ($1, 'other', 'After everyone turned it off', 'test')", [hA]);
 check(await queued(`household_id = '${hA}' and claimed_at is null`) === 0, "with no phones left, nothing is queued");
 
+// --- whose shit is it, and hand-offs ("that's Sam's, go ask Sam"). A (Alex) and B (Sam) are members of hA, C is not ---
+const handItem = (await as(A, "insert into public.inventory_items (household_id, created_by, name) values ($1, $2, 'Helmet mount') returning id", [hA, A])).rows[0].id;
+await expectError(() => as(A, "update public.inventory_items set owner_user = $2 where id = $1", [handItem, C]), "an item's owner has to be in the household", /not in this household/);
+await expectError(() => as(A, "insert into public.inventory_items (household_id, created_by, name, owner_user) values ($1, $2, 'Not theirs', $3)", [hA, A, C]),
+  "a new item cannot belong to an outsider", /not in this household/);
+check((await as(B, "update public.inventory_items set owner_user = $2 where id = $1 returning owner_user", [handItem, B])).rows[0].owner_user === B, "a member marks a thing as theirs");
+check((await as(A, "update public.inventory_items set owner_user = null where id = $1 returning owner_user", [handItem])).rows[0].owner_user === null, "and back to ours");
+
+await as(A, "select public.push_subscribe($1, $2, $3, $4, 'iPhone', 'https://resale.example.com')", [hA, endA, p256, authKey]);
+await as(B, "select public.push_subscribe($1, $2, $3, $4, 'iPhone', 'https://resale.example.com')", [hA, endB, p256, authKey]);
+const handListing = (await as(A, "insert into public.listings (household_id, item_id, platform, status, list_price, created_by) values ($1, $2, 'ebay', 'active', 39.99, $3) returning id", [hA, handItem, A])).rows[0].id;
+const handOffer = (await as(A, "insert into public.offers (household_id, listing_id, amount) values ($1, $2, 30) returning id", [hA, handListing])).rows[0].id;
+const handTask = (await as(A, `insert into public.agent_tasks (household_id, kind, title, item_id, listing_id, offer_id, requested_by)
+  values ($1, 'offer_decision', 'Offer: $30 for Helmet mount on eBay', $2, $3, $4, 'gmail-watcher') returning id`, [hA, handItem, handListing, handOffer])).rows[0].id;
+const claimPlain = (await asAnon("select public.push_claim($1, $2) as v", [hA, dispatchToken])).rows[0].v;
+check(claimPlain.items.length === 1 && claimPlain.items[0].task.owner_id === null && claimPlain.items[0].item.name === "Helmet mount", "an offer on a shared thing carries no owner");
+const hBOffer = (await as(B, "insert into public.offers (household_id, listing_id, amount) values ($1, $2, 2) returning id", [hB, hBVinted])).rows[0].id;
+
+await expectError(() => asAnon("select public.handoff_item($1, $2, $3)", [hA, B, handOffer]), "anon cannot hand things off", /permission denied/);
+await expectError(() => as(C, "select public.handoff_item($1, $2, $3)", [hA, B, handOffer]), "a non-member cannot hand off another household's offer", /Household not found/);
+await expectError(() => as(A, "select public.handoff_item($1, $2, $3)", [hA, C, handOffer]), "cannot hand off to someone outside the household", /not in this household/);
+await expectError(() => as(A, "select public.handoff_item($1, $2, $3)", [hA, A, handOffer]), "cannot hand off to yourself", /That's you/);
+await expectError(() => as(A, "select public.handoff_item($1, $2)", [hA, B]), "a hand-off needs an offer or an item", /Say which offer or item/);
+await expectError(() => as(A, "select public.handoff_item($1, $2, $3)", [hA, B, hBOffer]), "cannot hand off another household's offer", /Offer not found/);
+await expectError(() => as(A, "select public.handoff_item($1, $2, $3, $4)", [hA, B, handOffer, item]), "the offer and the item have to match", /different item/);
+await expectError(() => asAnon("select public.apply_handoff($1, $2, null, $3, $4, null)", [hA, A, B, handOffer]), "anon cannot call the hand-off core", /permission denied/);
+await expectError(() => as(A, "select public.apply_handoff($1, $2, null, $3, $4, null)", [hA, A, B, handOffer]), "members cannot call the hand-off core directly", /permission denied/);
+
+const handed = (await as(A, "select public.handoff_item($1, $2, $3) as v", [hA, B, handOffer])).rows[0].v;
+check(handed.to.id === B && handed.to.name === "Sam" && handed.from.name === "Alex" && handed.item.name === "Helmet mount" && Number(handed.offer.amount) === 30
+  && handed.offer.platform_name === "eBay" && handed.task_id === handTask && handed.devices === 1, "a hand-off says who was asked, about what, and that their phone will buzz");
+check((await as(A, "select owner_user from public.inventory_items where id = $1", [handItem])).rows[0].owner_user === B, "a hand-off remembers whose it is");
+check((await as(B, "select payload from public.agent_tasks where id = $1", [handTask])).rows[0].payload.asked_user === B, "the offer's to-do notes who was asked");
+const claimH = (await asAnon("select public.push_claim($1, $2) as v", [hA, dispatchToken])).rows[0].v;
+const hItem = claimH.items.find(i => i.kind === "handoff");
+check(claimH.items.length === 1 && hItem?.target_user === B && hItem.from_user === A && hItem.from_name === "Alex" && hItem.item?.name === "Helmet mount" && hItem.task?.id === handTask,
+  "the hand-off buzz goes only to the person asked, from the person asking, about that offer");
+check((await as(A, "select count(*)::int as n from public.activity_log where action = 'handed_off' and entity_id = $1", [handItem])).rows[0].n === 1, "hand-offs show in the activity feed");
+
+await as(A, "insert into public.agent_tasks (household_id, kind, title, item_id, requested_by) values ($1, 'offer_decision', 'Offer: $32 for Helmet mount on eBay', $2, 'gmail-watcher')", [hA, handItem]);
+const claimO = (await asAnon("select public.push_claim($1, $2) as v", [hA, dispatchToken])).rows[0].v;
+check(claimO.items.length === 1 && claimO.items[0].kind === "task" && claimO.items[0].target_user === null && claimO.items[0].task.owner_id === B && claimO.items[0].task.owner_name === "Sam",
+  "a new offer on someone's thing still goes to every phone, and says whose it is");
+
+// Through an assistant: by name, by "the other one", and before the other member has set a name.
+const token2 = "rhq_" + "h".repeat(43);
+await as(A, "insert into public.assistant_keys (household_id, user_id, label, key_hash, key_prefix) values ($1, $2, 'muse', $3, $4)",
+  [hA, A, createHash("sha256").update(token2, "utf8").digest("hex"), token2.slice(0, 12)]);
+await as(A, "update public.inventory_items set owner_user = null where id = $1", [handItem]);
+await expectError(() => asAnon("select public.assistant_handoff($1, 'Sam', $2)", ["rhq_" + "x".repeat(43), handOffer]), "a hand-off needs a valid assistant key", /Invalid assistant key/);
+check((await asAnon("select public.assistant_handoff($1, 'sAm', $2) as v", [token2, handOffer])).rows[0].v.to.id === B, "an assistant hands off by name, any case");
+const viaBlank = (await asAnon("select public.assistant_handoff($1, null, null, $2) as v", [token2, handItem])).rows[0].v;
+check(viaBlank.to.id === B && viaBlank.offer === null && viaBlank.item.name === "Helmet mount", "no name means the only other member; a thing can be handed off without an offer");
+await expectError(() => asAnon("select public.assistant_handoff($1, 'Jordan', $2)", [token2, handOffer]), "an unknown name is refused while everyone has one", /Nobody called Jordan/);
+await expectError(() => asAnon("select public.assistant_handoff($1, 'Alex', $2)", [token2, handOffer]), "an assistant cannot hand its own member's thing to them", /That's you/);
+await as(B, "update public.household_members set display_name = null where user_id = $1", [B]);
+const viaUnnamed = (await asAnon("select public.assistant_handoff($1, 'Lauren', $2) as v", [token2, handOffer])).rows[0].v;
+check(viaUnnamed.to.id === B && viaUnnamed.to.name === null, "a name reaches the only other member before they have set one");
+await as(B, "update public.household_members set display_name = 'Sam' where user_id = $1", [B]);
+check((await as(A, "select actor_agent from public.activity_log where action = 'handed_off' order by id desc limit 1")).rows[0].actor_agent === "muse",
+  "assistant hand-offs are attributed to the assistant");
+const inboxH = (await asAnon("select public.assistant_inbox($1, false) as v", [token2])).rows[0].v;
+const offH = inboxH.pending_offers.find(o => o.offer_id === handOffer);
+check(inboxH.members.length === 2 && inboxH.members.some(m => m.is_you && m.name === "Alex") && inboxH.members.some(m => !m.is_you && m.name === "Sam"),
+  "the assistant inbox lists the household's members");
+check(offH?.item.owner?.name === "Sam" && offH.item.owner.is_you === false && offH.asked?.name === "Sam", "the inbox says whose each offer's thing is and who was asked");
+check(inboxH.listings.find(l => l.listing_id === handListing)?.owner === "Sam", "listings say whose they are");
+
+await as(A, "select public.decide_offer($1, 'declined')", [handOffer]);
+await expectError(() => as(A, "select public.handoff_item($1, $2, $3)", [hA, B, handOffer]), "an answered offer cannot be handed off", /already answered/);
+check((await as(B, "select public.handoff_item($1, $2, null, $3) as v", [hA, A, handItem])).rows[0].v.to.name === "Alex", "it works the other way round too");
+
 console.log(failures ? `${failures} FAILED` : "ALL PASSED");
 process.exit(failures ? 1 : 0);

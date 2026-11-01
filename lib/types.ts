@@ -63,6 +63,8 @@ export type InventoryItem = {
   purchase_cost: number;
   target_price: number;
   floor_price: number | null;
+  /** Whose shit it is: a household member's user id, or null when it's ours. */
+  owner_user?: string | null;
   status: ItemStatus;
   notes: string | null;
   sold_price: number | null;

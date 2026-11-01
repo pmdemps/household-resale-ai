@@ -6,6 +6,7 @@ import {
   BadRequest,
   decisionSay,
   enrichOffers,
+  handoffSay,
   mapDbError,
   normalizeDecision,
   offerMoney,
@@ -14,6 +15,7 @@ import {
   saleSay,
   summarizeInbox,
   type DecisionResult,
+  type HandoffResult,
   type Inbox,
   type InboxOffer,
 } from "./protocol.ts";
@@ -183,4 +185,48 @@ test("database errors map to HTTP answers the assistant can act on", () => {
   assert.equal(mapDbError({ code: "42501", message: "permission denied for function assistant_inbox" }).code, "misconfigured");
   assert.equal(mapDbError({ code: "PGRST202", message: "Could not find the function public.assistant_inbox" }).code, "misconfigured", "migration not applied yet");
   assert.equal(mapDbError(null).status, 500);
+});
+
+test("hand_off needs an offer or an item; the name is optional", () => {
+  assert.deepEqual(parseAction({ action: "hand_off", to: " Lauren ", offer_id: OFFER }), { action: "hand_off", to: "Lauren", offer_id: OFFER, item_id: null });
+  assert.deepEqual(parseAction({ action: "hand_off", item_id: OFFER }), { action: "hand_off", to: null, offer_id: null, item_id: OFFER });
+  assert.throws(() => parseAction({ action: "hand_off", to: "Lauren" }), (e: unknown) => e instanceof BadRequest && /offer_id .* or item_id/.test((e as Error).message));
+  assert.throws(() => parseAction({ action: "hand_off", offer_id: "nope" }), BadRequest);
+});
+
+const handoff = (over: Partial<HandoffResult> = {}): HandoffResult => ({
+  item: { id: "i", name: "Motorcycle helmet wall mount" },
+  to: { id: "l", name: "Lauren" },
+  from: { id: "p", name: "Patrick" },
+  offer: { id: OFFER, amount: 30, platform: "ebay", platform_name: "eBay" },
+  task_id: "t",
+  devices: 1,
+  ...over,
+});
+
+test("hand-off sentences say who was asked, whether their phone buzzed, and whose it is now", () => {
+  assert.equal(handoffSay(handoff()),
+    "Handed the $30.00 offer on Motorcycle helmet wall mount (eBay) to Lauren. Lauren's phone was notified and asked how badly they want to sell it. Motorcycle helmet wall mount is now marked as Lauren's; either of you can still answer the offer.");
+  const quiet = handoffSay(handoff({ devices: 0, offer: null }));
+  assert.match(quiet, /^Handed Motorcycle helmet wall mount to Lauren\. Lauren does not have phone notifications on/);
+  assert.match(quiet, /now marked as Lauren's\.$/);
+  const unnamed = handoffSay(handoff({ to: { id: "l", name: null } }), "lauren");
+  assert.match(unnamed, /to lauren\./);
+  assert.match(unnamed, /lauren has not set a name in Resale HQ yet/);
+  assert.match(handoffSay(handoff({ to: { id: "l", name: null } })), /to The other household member\./);
+});
+
+test("offers say whose thing it is and who was asked", () => {
+  const [mine, hers] = enrichOffers([
+    offer({ item: { id: "i", name: "Kids bike", floor_price: null, purchase_cost: 0, owner: { id: "u", name: "Patrick", is_you: true } } }),
+    offer({ item: { id: "j", name: "Boots", floor_price: null, purchase_cost: 0, owner: { id: "l", name: null, is_you: false } }, asked: { id: "l", name: "Lauren", at: "" } }),
+  ], false);
+  const inbox: Inbox = {
+    household: null, member: null, assistant: "muse", checked_at: "", new_since: "", ebay_connected: false,
+    pending_offers: [mine, hers], tasks: [], listings: [],
+  };
+  const say = summarizeInbox(inbox, [mine, hers]);
+  assert.match(say, /\$30\.00 for Kids bike \(yours\) on Vinted/);
+  assert.match(say, /\$30\.00 for Boots \(the other household member's\) on Vinted/);
+  assert.match(say, /Lauren has been asked about it/);
 });

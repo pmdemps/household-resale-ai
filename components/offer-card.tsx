@@ -1,11 +1,18 @@
 import Link from "next/link";
-import { AlertTriangle, Check, Repeat, X } from "lucide-react";
-import { decideOffer } from "@/app/actions";
+import { AlertTriangle, Check, Repeat, Send, X } from "lucide-react";
+import { decideOffer, handOffOffer } from "@/app/actions";
 import { FeeBreakdown } from "@/components/fee-breakdown";
 import { ProfitBadge } from "@/components/money";
 import { estimateFees } from "@/lib/fees";
 import { platformName } from "@/lib/platforms";
-import { money, num } from "@/lib/types";
+import { money, num, timeAgo } from "@/lib/types";
+
+/** A household member as the offer card needs them; name is null until they set one in Settings. */
+export type CardMember = { id: string; name: string | null };
+
+const OTHER_HALF = "your other half";
+const possessive = (name: string) => (/s$/i.test(name) ? `${name}'` : `${name}'s`);
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export type OfferWithContext = {
   id: string;
@@ -16,10 +23,22 @@ export type OfferWithContext = {
   /** Marketplace id of the offer (eBay BestOfferID) when it was pulled in through an API; null for offers typed in by hand. */
   external_id?: string | null;
   listing: { id: string; platform: string; list_price: number; listing_url: string | null };
-  item: { id: string; name: string; purchase_cost: number; floor_price: number | null };
+  item: { id: string; name: string; purchase_cost: number; floor_price: number | null; owner_user?: string | null };
+  /** Set when someone handed this offer to a member ("that's Lauren's, go ask her"). */
+  asked?: { user: string; at: string } | null;
 };
 
-export function OfferCard({ offer }: { offer: OfferWithContext }) {
+/**
+ * `members` and `currentUser` turn on the "whose shit" bits: the owner tag, "Asked Lauren", and an
+ * "Ask Lauren" button per other member that buzzes only their phone.
+ */
+export function OfferCard({ offer, members = [], currentUser }: { offer: OfferWithContext; members?: CardMember[]; currentUser?: string }) {
+  const nameOf = (id: string) => members.find(m => m.id === id)?.name ?? null;
+  const owner = offer.item.owner_user ?? null;
+  const ownerTag = !owner ? null : owner === currentUser ? "Your shit" : `${possessive(nameOf(owner) ?? capitalize(OTHER_HALF))} shit`;
+  const asked = offer.asked ?? null;
+  const askedName = asked ? (asked.user === currentUser ? "you" : nameOf(asked.user) ?? OTHER_HALF) : null;
+  const others = currentUser ? members.filter(m => m.id !== currentUser) : [];
   const amount = num(offer.amount);
   const listPrice = num(offer.listing.list_price);
   const cost = num(offer.item.purchase_cost);
@@ -33,7 +52,11 @@ export function OfferCard({ offer }: { offer: OfferWithContext }) {
     <article className="surface p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs font-medium text-slate-500">Offer on {platformName(offer.listing.platform)}</p>
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium text-slate-500">
+            <span>Offer on {platformName(offer.listing.platform)}</span>
+            {ownerTag && <span className="rounded-full bg-accent/15 px-2 py-0.5 text-link">{ownerTag}</span>}
+            {askedName && <span className="text-slate-400">Asked {askedName}{asked?.at ? ` ${timeAgo(asked.at)}` : ""}</span>}
+          </p>
           <Link href={`/inventory/${offer.item.id}`} className="mt-1 block truncate text-base font-semibold text-white hover:underline">
             {offer.item.name}
           </Link>
@@ -95,6 +118,18 @@ export function OfferCard({ offer }: { offer: OfferWithContext }) {
           <input type="hidden" name="decision" value="declined" />
           <button className="btn-secondary"><X size={15} /> Fuck no</button>
         </form>
+        {others.map(m => {
+          const label = m.name ?? OTHER_HALF;
+          return (
+            <form key={m.id} action={handOffOffer}>
+              <input type="hidden" name="offer_id" value={offer.id} />
+              <input type="hidden" name="to_user" value={m.id} />
+              <button className="btn-secondary" title={`Their shit? Buzzes only ${possessive(label)} phone to ask how badly they wanna sell it`}>
+                <Send size={15} /> {asked?.user === m.id ? `Ask ${label} again` : `Ask ${label}`}
+              </button>
+            </form>
+          );
+        })}
       </div>
       <p className="mt-2 text-[11px] text-slate-500">
         {offer.listing.platform === "ebay" && offer.external_id ? (
