@@ -168,3 +168,23 @@ button, input, select, textarea { font: inherit; }
   from { transform: translateX(-24px) rotate(calc(var(--spin) * -28deg)) rotateY(0deg); }
   to { transform: translateX(24px) rotate(calc(var(--spin) * 28deg)) rotateY(55deg); }
 }
+/* Raining sunflowers: the light theme's twin of the cash rain (same fall and sway keyframes). */
+.sunflower-rain { display: none; }
+:root[data-theme="light"] .sunflower-rain { display: block; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .sunflower-rain { display: block; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sunflower-rain { display: none !important; }
+}
+.sunflower-drop {
+  position: absolute;
+  top: -12vh;
+  opacity: 0.42;
+  will-change: transform;
+  animation-name: cash-fall, cash-sway;
+  animation-timing-function: linear, ease-in-out;
+  animation-iteration-count: infinite, infinite;
+  animation-direction: normal, alternate;
+}
+
