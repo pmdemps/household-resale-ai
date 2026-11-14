@@ -62,6 +62,14 @@ test("decision words from a person map to the stored values", () => {
 const OFFER = "9b3f1b6a-5a6e-4f2a-9c1d-2e3f4a5b6c7d";
 const LISTING = "1b3f1b6a-5a6e-4f2a-9c1d-2e3f4a5b6c7e";
 
+test("record_listing accepts only the helper's sites and https links", () => {
+  assert.deepEqual(parseAction({ action: "record_listing", item_id: OFFER, platform: "Mercari", url: "https://www.mercari.com/us/item/m1234567/", price: "28" }), {
+    action: "record_listing", item_id: OFFER, platform: "mercari", url: "https://www.mercari.com/us/item/m1234567/", price: 28, external_id: null,
+  });
+  assert.throws(() => parseAction({ action: "record_listing", item_id: OFFER, platform: "vinted", price: 5 }), /platform must be/);
+  assert.throws(() => parseAction({ action: "record_listing", item_id: OFFER, platform: "poshmark", url: "http://x", price: 5 }), /https/);
+});
+
 test("parseAction validates each action and rejects junk with a usable sentence", () => {
   assert.deepEqual(parseAction({ action: "decide", offer_id: OFFER, decision: "take it" }), {
     action: "decide", offer_id: OFFER, decision: "accepted", counter_amount: null, shipping_cost: 0, override_floor: false,

@@ -36,13 +36,15 @@ These apply to any agent that reads or acts on marketplaces, email, or the house
 
 | Platform | Rule |
 |---|---|
-| Facebook Marketplace | Post to **Marketplace only**. Never share to News Feed, Stories, or groups. Always turn on **Hide from friends**. |
+| Facebook Marketplace | Post to **Marketplace only**. Never share to News Feed, Stories, or groups. Always turn on **Hide from friends**. The posting helper may fill the form; the member taps Publish. |
 | Vinted | No automation of the Vinted site or app at all (they detect bots and suspend accounts). Read notification emails; a human taps the buttons. |
 | Etsy | Only vintage (20+ years), handmade, or craft supplies. Used modern clothing, shoes, toys, and household goods are not allowed. |
 | eBay | Official APIs only. Best Offer on, auto-decline below floor price. |
-| Poshmark, Mercari | No public API; terms prohibit automation. Email tracking plus manual action only. |
+| Poshmark, Mercari | No public API; terms prohibit automation. The household chose to use the posting helper (`extension/`), which only fills the sell form in a member's own logged-in browser; the member taps List. No other automation (sharing, following, offers, relisting). |
 | OfferUp | No public API. A human posts; the app writes the text ("Post it ourselves"). Local pickup in public places. |
 | ThredUp | Consignment, not a marketplace. A human bags and ships clothes; record the bag as a $0 listing, then the payout as the sale. |
+
+**Posting helper** (`extension/`, a Chrome extension the household installs): for Mercari, Poshmark and Facebook only, it reads the "Post it on …" to-dos (`GET /api/assistant?post_queue=1`, migration `20261114010000_posting_helper.sql`), opens the site's sell page in the member's own logged-in Chrome, fills title, description, price and photos, and shows what to pick by hand. It **never presses Post/List/Publish**: the member does, which is the approval. When the site shows the new listing (or the member presses "I posted it") it calls `record_listing`, which records the listing, turns the switch on and closes the to-do. It never stores passwords, never touches Vinted, and does nothing else on those sites. Site field selectors live in `extension/sites.js`.
 
 For every platform without an API, `components/post-it-ourselves.tsx` (item page) writes copy-ready, clean listing text with `lib/listing-copy.ts` and links to the platform's own sell page (`sellUrl` in `lib/platforms.ts`). Agents never fill in those sites' forms or post there on their own.
 

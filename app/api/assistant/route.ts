@@ -25,6 +25,7 @@ import {
   type Inbox,
   type RecordOfferResult,
   type SaleResult,
+  HELPER_PLATFORMS,
 } from "@/lib/assistant/protocol";
 import { AssistantApiError, callAssistantFunction } from "@/lib/assistant/server";
 import { downloadImage, reservePhotoSlot, storeAssistantPhoto } from "@/lib/assistant/photos";
@@ -46,8 +47,9 @@ export const maxDuration = 30;
 //   GET  /api/assistant?find=nike  unsold items matching a name or brand (ids for the calls below)
 //   GET  /api/assistant?item_id=…  one item in full: platform switches, live listings, what others sell it for
 //                                  (lowest, typical, verdict, links) and paste-ready listing text per platform
+//   GET  /api/assistant?post_queue=1  "Post it on Mercari/Poshmark/Facebook" to-dos for the posting helper (extension/)
 //   POST /api/assistant            { action: decide | record_offer | record_sale | note | resolve_task | propose_task | hand_off
-//                                    | set_platform | add_comp | add_item | add_photo, ... }
+//                                    | set_platform | add_comp | add_item | add_photo | record_listing, ... }
 //   POST /api/assistant (multipart)  action=add_photo, item_id, file: the photo itself (under ~4 MB, Vercel's cap)
 //
 // Credential: an assistant key from Settings, sent as `Authorization: Bearer <key>` (or `X-Assistant-Key`).
@@ -58,6 +60,7 @@ export const maxDuration = 30;
 // app, so it stays clean (AGENTS.md). Paste-ready instructions for the assistant: docs/agents/assistant-concierge.md.
 
 type Json = Record<string, unknown>;
+type PostQueueEntry = { task_id: string; item_id: string; platform: string; title: string; item_name: string; created_at: string };
 
 const json = (body: Json, status = 200) => NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
 
@@ -66,6 +69,7 @@ const HELP = {
   get: "GET /api/assistant (add ?peek=1 to look without marking items as seen)",
   find: "GET /api/assistant?find=<words from the item name or brand> → items with item_id (also finds things not listed anywhere yet)",
   item: "GET /api/assistant?item_id=<id> → platform switches, live listings, comps (lowest, typical, verdict, links) and paste-ready listing text",
+  post_queue: "GET /api/assistant?post_queue=1 → items switched on for Mercari, Poshmark or Facebook that still need posting (for the posting helper)",
   post: {
     decide: { offer_id: "<from pending_offers>", decision: "accept | decline | counter", counter_amount: "number, for counter", override_floor: "true only when the member explicitly allows going below the floor price" },
     record_offer: { listing_id: "<from listings>", amount: "number", buyer: "optional", note: "optional, e.g. the email subject", source: "email | agent | manual" },
@@ -77,6 +81,7 @@ const HELP = {
     set_platform: { item_id: "<from find or listings>", platform: "ebay | mercari | poshmark | offerup | facebook | vinted | etsy | thredup | depop", on: "true to list it there, false to take it down" },
     add_item: { name: "what it is, e.g. Carhartt work boots", category: "Clothing | Shoes | Toys & games | Kids & baby | Home & kitchen | Electronics | Tools | Books & media | Collectibles | Other", brand: "optional", size: "optional", condition: "New with tags | New without tags | Like new | Good | Fair | For parts", asking: "optional number", floor: "optional number, lowest we'd take", cost: "optional number, what we paid", notes: "optional" },
     add_photo: { item_id: "<from add_item, find or listings>", image_url: "https link to the photo; it is downloaded right away, so a temporary link is fine. Or POST multipart/form-data with action=add_photo, item_id and a file field (under 4 MB). JPEG, PNG or WebP, up to 10 MB by link; longest side 2000 px is plenty." },
+    record_listing: { item_id: "<from post_queue>", platform: "mercari | poshmark | facebook", url: "https link to the live listing", price: "number, the price it went up at", external_id: "optional, the site's listing id" },
     add_comp: { item_id: "<from find or listings>", title: "the other listing's title", price: "number (item price, not including shipping)", shipping: "optional number, 0 = free", url: "https link to the listing", platform: "where it's listed", kind: "active | sold", condition: "optional" },
   },
 };
@@ -110,6 +115,11 @@ export async function GET(request: NextRequest) {
       const q = (params.get("find") ?? "").trim().slice(0, 100) || null;
       const items = await callAssistantFunction<FoundItem[]>("assistant_find_items", { p_key: key, p_query: q });
       return json({ ok: true, say: findItemsSay(items, q), items, help: HELP });
+    }
+    if (params.has("post_queue")) {
+      const queue = await callAssistantFunction<PostQueueEntry[]>("assistant_post_queue", { p_key: key, p_platforms: [...HELPER_PLATFORMS] });
+      const entries = queue.map(q => ({ ...q, platform_name: platformName(q.platform) }));
+      return json({ ok: true, say: entries.length ? `${entries.length} listing${entries.length === 1 ? "" : "s"} waiting to be posted.` : "Nothing waiting to be posted.", queue: entries, help: HELP });
     }
     if (params.has("item_id")) {
       const itemId = (params.get("item_id") ?? "").trim();
@@ -201,6 +211,12 @@ export async function POST(request: NextRequest) {
         const bytes = await downloadImage(action.image_url);
         const r = await storeAssistantPhoto(key, slot, bytes);
         return json({ ok: true, say: photoSay(r), result: r });
+      }
+      case "record_listing": {
+        const r = await callAssistantFunction<{ listing_id: string; item: string; platform: string; duplicate: boolean }>("assistant_record_listing", {
+          p_key: key, p_item_id: action.item_id, p_platform: action.platform, p_url: action.url, p_price: action.price, p_external_id: action.external_id,
+        });
+        return json({ ok: true, say: r.duplicate ? `${r.item} was already recorded as live on ${platformName(r.platform)}.` : `Recorded ${r.item} as live on ${platformName(r.platform)} at ${money(action.price)}.`, result: r });
       }
       case "add_comp": {
         const r = await callAssistantFunction<{ comp_id: string; item_id: string }>("assistant_add_comp", {

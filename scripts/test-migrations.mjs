@@ -707,6 +707,28 @@ check((await as(A, "select count(*)::int as n from public.item_platform_gaps whe
   await expectError(() => asAnon("select public.assistant_photo_slot($1, $2)", [token2, itemB2]), "assistant cannot add photos to another household's item", /Item not found/);
 }
 
+// Posting helper (20261114010000): queue of "post it" to-dos and recording what the member posted.
+{
+  const itemP = (await as(A, `insert into public.inventory_items (household_id, created_by, name, brand, target_price, status) values ($1, $2, 'Cargo joggers', 'Eighteen Plus', 28, 'draft') returning id`, [hA, A])).rows[0].id;
+  await asAnon("select public.assistant_set_platform($1, $2, 'mercari', true)", [token2, itemP]);
+  await asAnon("select public.assistant_set_platform($1, $2, 'vinted', true)", [token2, itemP]);
+  const queue = (await asAnon("select public.assistant_post_queue($1) as v", [token2])).rows[0].v;
+  check(queue.some(q => q.item_id === itemP && q.platform === "mercari"), "the helper's queue lists the Mercari to-do");
+  check(!queue.some(q => q.platform === "vinted"), "the helper's queue never includes Vinted");
+  await expectError(() => asAnon("select public.assistant_post_queue($1)", ["rhq_" + "x".repeat(43)]), "the queue needs a valid key", /Invalid assistant key/);
+  await expectError(() => asAnon("select public.assistant_record_listing($1, $2, 'vinted', null, 28)", [token2, itemP]), "the helper can't record Vinted listings", /only records/);
+  await expectError(() => asAnon("select public.assistant_record_listing($1, $2, 'mercari', 'http://x.example', 28)", [token2, itemP]), "listing links must be https", /https/);
+  const rec = (await asAnon("select public.assistant_record_listing($1, $2, 'mercari', 'https://www.mercari.com/us/item/m12345678901/', 28, 'm12345678901') as v", [token2, itemP])).rows[0].v;
+  check(rec.duplicate === false && rec.todos_done === 1, "recording closes the Mercari to-do");
+  const again = (await asAnon("select public.assistant_record_listing($1, $2, 'mercari', 'https://www.mercari.com/us/item/m12345678901/', 28) as v", [token2, itemP])).rows[0].v;
+  check(again.duplicate === true && again.listing_id === rec.listing_id, "a repeated report doesn't add a second listing");
+  const st = (await db.query("select status from public.inventory_items where id = $1", [itemP])).rows[0].status;
+  check(st === "listed", "the item is marked listed");
+  check(!(await asAnon("select public.assistant_post_queue($1) as v", [token2])).rows[0].v.some(q => q.item_id === itemP && q.platform === "mercari"), "a posted item leaves the queue");
+  const itemOther = (await as(B, `insert into public.inventory_items (household_id, created_by, name) values ($1, $2, 'Not yours') returning id`, [hB, B])).rows[0].id;
+  await expectError(() => asAnon("select public.assistant_record_listing($1, $2, 'mercari', null, 5)", [token2, itemOther]), "the helper can't record another household's item", /Item not found/);
+}
+
 // Every assistant_* function checks its key with assistant_resolve_key, which writes last_used_at. PostgREST runs
 // STABLE/IMMUTABLE functions read-only, so any non-VOLATILE one fails live with "cannot execute UPDATE in a
 // read-only transaction" (bug found in 20261101040000). Guard against it for all of them, present and future.

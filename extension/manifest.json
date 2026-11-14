@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Resale HQ Posting Helper",
+  "version": "0.1.0",
+  "description": "Fills in Mercari, Poshmark and Facebook Marketplace sell forms from Resale HQ. You review and tap Post yourself.",
+  "permissions": ["storage", "tabs"],
+  "host_permissions": [
+    "https://www.mercari.com/*",
+    "https://poshmark.com/*",
+    "https://www.facebook.com/*",
+    "https://*.supabase.co/*"
+  ],
+  "optional_host_permissions": ["https://*/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": { "default_popup": "popup.html", "default_title": "Resale HQ" },
+  "options_page": "options.html",
+  "content_scripts": [
+    {
+      "matches": ["https://www.mercari.com/*", "https://poshmark.com/*", "https://www.facebook.com/marketplace/*"],
+      "js": ["sites.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
