@@ -1,5 +1,6 @@
 // Ready-to-paste listing text for marketplaces with no API (Poshmark, Mercari, OfferUp, Facebook, Vinted).
-// A human pastes this into the platform's own app; Resale HQ never automates those sites (see AGENTS.md).
+// A human pastes this into the platform's own app, or the posting helper (extension/) fills it in on Mercari,
+// Poshmark and Facebook and the human taps Post. Nothing ever submits a listing on its own (see AGENTS.md).
 //
 // Everything here leaves the app and is seen by buyers, so it stays clean and professional:
 // no cussing, and never anything from the item's private household notes.

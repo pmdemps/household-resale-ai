@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Resale HQ helper settings</title>
+  <style>
+    body { max-width: 520px; margin: 24px auto; font: 15px/1.5 -apple-system, system-ui, sans-serif; }
+    label { display: block; margin-top: 12px; font-weight: 600; }
+    input { width: 100%; padding: 8px; font: inherit; box-sizing: border-box; }
+    button { margin-top: 16px; padding: 8px 14px; font: inherit; font-weight: 700; }
+    #msg { margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <h1>Resale HQ posting helper</h1>
+  <p>Make a key in Resale HQ → Settings → Assistant keys (name it "Posting helper"), then paste it here.</p>
+  <label>Resale HQ address <input id="appUrl" placeholder="https://your-resale-hq.vercel.app"></label>
+  <label>Key <input id="key" type="password" autocomplete="off"></label>
+  <button id="save">Save and test</button>
+  <div id="msg"></div>
+  <script src="options.js"></script>
+</body>
+</html>

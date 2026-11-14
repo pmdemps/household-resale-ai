@@ -295,7 +295,12 @@ export type AssistantAction =
   | { action: "set_platform"; item_id: string; platform: string; on: boolean }
   | { action: "add_item"; name: string; category: string; brand: string | null; size: string | null; condition: string | null; asking: number; floor: number | null; cost: number; notes: string | null }
   | { action: "add_photo"; item_id: string; image_url: string }
-  | { action: "add_comp"; item_id: string; platform: string; title: string; price: number; shipping: number | null; url: string | null; kind: "active" | "sold"; condition: string | null; note: string | null };
+  | { action: "add_comp"; item_id: string; platform: string; title: string; price: number; shipping: number | null; url: string | null; kind: "active" | "sold"; condition: string | null; note: string | null }
+  | { action: "record_listing"; item_id: string; platform: HelperPlatform; url: string | null; price: number; external_id: string | null };
+
+/** Sites the posting helper (extension/) fills in. Vinted is never one of them (AGENTS.md). */
+export const HELPER_PLATFORMS = ["mercari", "poshmark", "facebook"] as const;
+export type HelperPlatform = (typeof HELPER_PLATFORMS)[number];
 
 export class BadRequest extends Error {}
 
@@ -317,7 +322,7 @@ const amount = (v: unknown, field: string): number => {
 };
 const optAmount = (v: unknown, field: string): number | null => (v === null || v === undefined || v === "" ? null : amount(v, field));
 
-export const ASSISTANT_ACTIONS = ["decide", "record_offer", "record_sale", "note", "resolve_task", "propose_task", "hand_off", "set_platform", "add_comp", "add_item", "add_photo"] as const;
+export const ASSISTANT_ACTIONS = ["decide", "record_offer", "record_sale", "note", "resolve_task", "propose_task", "hand_off", "set_platform", "add_comp", "add_item", "add_photo", "record_listing"] as const;
 
 /** Validates a POST body. Throws BadRequest with a sentence the assistant can act on. */
 export function parseAction(body: unknown): AssistantAction {
@@ -423,6 +428,13 @@ export function parseAction(body: unknown): AssistantAction {
         condition: str(b.condition, 80),
         note: str(b.note, 300),
       };
+    }
+    case "record_listing": {
+      const platform = (str(b.platform, 20) ?? "").toLowerCase();
+      if (!(HELPER_PLATFORMS as readonly string[]).includes(platform)) throw new BadRequest(`platform must be ${HELPER_PLATFORMS.join(", ")}.`);
+      const url = str(b.url, 1000);
+      if (url && !/^https:\/\//i.test(url)) throw new BadRequest("url must start with https://");
+      return { action, item_id: uuid(b.item_id, "item_id"), platform: platform as HelperPlatform, url, price: amount(b.price, "price"), external_id: str(b.external_id, 200) };
     }
     default:
       throw new BadRequest(`Unknown action "${action}". Use one of: ${ASSISTANT_ACTIONS.join(", ")}.`);
