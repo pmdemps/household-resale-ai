@@ -721,5 +721,41 @@ check((await as(A, "select count(*)::int as n from public.item_platform_gaps whe
   check(readOnlyFails, "a key check needs a writable transaction (why lookups can't be STABLE)");
 }
 
+// Photo inbox (20261114000000): an SQL-only agent queues photo bytes; the app claims them with the dispatch token.
+{
+  const b64 = Buffer.from("not really a jpeg but base64 all the same").toString("base64");
+  await expectError(() => as(A, "select id from public.photo_inbox"), "members cannot read the photo inbox", /permission denied/);
+  await expectError(() => asAnon("select id from public.photo_inbox"), "anon cannot read the photo inbox", /permission denied/);
+  await expectError(() => as(A, "select public.photo_inbox_add($1, $2, $3, 'Claude')", [item, b64, A]), "members cannot queue inbox photos directly", /permission denied/);
+  await expectError(() => asAnon("select public.photo_inbox_add($1, $2, $3, 'Claude')", [item, b64, A]), "anon cannot queue inbox photos", /permission denied/);
+  const C = "33333333-3333-3333-3333-333333333333";
+  await db.query("insert into auth.users values ($1, 'c@example.com') on conflict do nothing", [C]);
+  await expectError(() => db.query("select public.photo_inbox_add($1, $2, $3, 'Claude')", [item, b64, C]), "the sender must be in the item's household", /isn't in this item's household/);
+  await expectError(() => db.query("select public.photo_inbox_add($1, $2, $3, 'Claude')", [item, "data:image/jpeg;base64," + b64, A]), "a data: prefix is refused", /plain base64/);
+  const inboxId = (await db.query("select public.photo_inbox_add($1, $2, $3, 'Claude') as id", [item, b64, A])).rows[0].id;
+  check(!!inboxId, "the database owner queues a photo for a member");
+
+  await expectError(() => asAnon("select public.photo_inbox_claim($1, $2)", [hA, "0".repeat(64)]), "inbox claim refuses a wrong token", /Invalid dispatch token/);
+  await expectError(() => asAnon("select public.photo_inbox_claim($1, $2)", [hB, dispatchToken]), "inbox claim token only works for its own household", /Invalid dispatch token/);
+  const got = (await asAnon("select public.photo_inbox_claim($1, $2) as v", [hA, dispatchToken])).rows[0].v;
+  check(got.items.length === 1 && got.items[0].inbox_id === inboxId && got.items[0].photo_base64 === b64, "the app claims the waiting photo with its bytes");
+  check((await asAnon("select public.photo_inbox_claim($1, $2) as v", [hA, dispatchToken])).rows[0].v.items.length === 0, "a claimed photo is not handed out twice");
+
+  await expectError(() => asAnon("select public.photo_inbox_done($1, $2, $3, $4)", [hA, dispatchToken, inboxId, `${hB}/${item}/aaaaaaaa-bbbb-cccc-dddd-000000000001.jpg`]),
+    "inbox done refuses a path outside the item's folder", /doesn't belong/);
+  const failed = (await asAnon("select public.photo_inbox_done($1, $2, $3, null, null, null, null, 'bad bytes') as v", [hA, dispatchToken, inboxId])).rows[0].v;
+  check(failed.ok === false && (await db.query("select last_error from public.photo_inbox where id = $1", [inboxId])).rows[0].last_error === "bad bytes", "a failed photo keeps its row and the reason");
+  await db.query("update public.photo_inbox set claimed_at = now() - interval '10 minutes' where id = $1", [inboxId]);
+  check((await asAnon("select public.photo_inbox_claim($1, $2) as v", [hA, dispatchToken])).rows[0].v.items.length === 1, "a stuck photo is retried after 5 minutes");
+
+  const before = (await db.query("select count(*)::int as n from public.item_photos where item_id = $1", [item])).rows[0].n;
+  const path = `${hA}/${item}/aaaaaaaa-bbbb-cccc-dddd-000000000002.jpg`;
+  const done = (await asAnon("select public.photo_inbox_done($1, $2, $3, $4, 1500, 2000, 345678) as v", [hA, dispatchToken, inboxId, path])).rows[0].v;
+  const row = (await db.query("select created_by, position from public.item_photos where storage_path = $1", [path])).rows[0];
+  check(done.ok === true && row && row.created_by === A && row.position >= before, "a stored photo is recorded on the item as the member who sent it");
+  check((await db.query("select count(*)::int as n from public.photo_inbox where id = $1", [inboxId])).rows[0].n === 0, "the inbox row is removed once stored");
+  check((await db.query("select count(*)::int as n from public.activity_log where action = 'photo_added' and actor_agent = 'Claude' and entity_id = $1", [item])).rows[0].n === 1, "the photo is logged with the agent's name");
+}
+
 console.log(failures ? `${failures} FAILED` : "ALL PASSED");
 process.exit(failures ? 1 : 0);

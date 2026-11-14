@@ -4,9 +4,9 @@ import { NextResponse, type NextRequest } from "next/server";
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
 // Routes that carry their own credential instead of a browser session: the assistant key, the cron secret,
-// eBay's signed account-deletion notices, the database's push dispatch token. Without this the middleware
+// eBay's signed account-deletion notices, the database's push dispatch token (push and the photo inbox). Without this the middleware
 // would bounce them to /login.
-const SELF_AUTHENTICATED_API = ["/api/assistant", "/api/ebay/sync", "/api/ebay/account-deletion", "/api/push/dispatch"];
+const SELF_AUTHENTICATED_API = ["/api/assistant", "/api/ebay/sync", "/api/ebay/account-deletion", "/api/push/dispatch", "/api/photos/inbox"];
 // /sw.js: browsers refuse a service worker script that answers with a redirect.
 const PUBLIC_PATHS = ["/login", "/auth", "/manifest.webmanifest", "/apple-icon", "/icon.svg", "/sw.js", ...SELF_AUTHENTICATED_API];
 

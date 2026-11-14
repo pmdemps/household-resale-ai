@@ -93,8 +93,8 @@ export async function downloadImage(url: string): Promise<Uint8Array> {
   return out;
 }
 
-/** Upright, at most 2000 px on the longest side, JPEG, no metadata. */
-async function normalizePhoto(bytes: Uint8Array): Promise<{ data: Buffer; width: number; height: number }> {
+/** Upright, at most 2000 px on the longest side, JPEG, no metadata. Also used by the photo inbox (lib/photo-inbox.ts). */
+export async function normalizePhoto(bytes: Uint8Array): Promise<{ data: Buffer; width: number; height: number }> {
   if (bytes.byteLength === 0) bad("The photo was empty.");
   if (bytes.byteLength > MAX_ASSISTANT_PHOTO_BYTES) bad(TOO_BIG, 413, "too_large");
   const type = sniffImageType(bytes);
